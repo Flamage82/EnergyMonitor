@@ -1,0 +1,8 @@
+{
+  "name": "marburg-energy-proxy",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-07",
+  "vars": {
+    "ALLOWED_ORIGIN": "http://localhost:5173"
+  }
+}
