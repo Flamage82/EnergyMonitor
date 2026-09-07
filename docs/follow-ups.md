@@ -28,12 +28,13 @@ Items deferred from the final whole-branch review of `feat/energy-dashboard`
   ```
   Call it from both sites; delete the now-dead `daysElapsedInMonth` and its test.
 
-- **Dark-mode chart colours.** `app/src/components/EnergyChart.tsx` hardcodes hex
-  stroke/fill colours, and Recharts' default axis/grid strokes are dark grey — in
-  the `prefers-color-scheme: dark` theme (which `App.css` fully implements) the
-  axes and tick labels are near-invisible. Read the CSS custom properties via
-  `getComputedStyle`, or pass explicit dark-safe colours, and add explicit
-  `stroke` to `<XAxis>` / `<YAxis>` / `<CartesianGrid>`.
+- **Dark-mode chart axes/grid.** The series colours now come from theme-aware
+  `--chart-*` custom properties in `App.css` (done 2026-09-07), but Recharts'
+  default axis/grid/tick strokes are still dark grey — in the
+  `prefers-color-scheme: dark` theme (which `App.css` fully implements) the axes
+  and tick labels are near-invisible. Add explicit `stroke` (from a `--chart-axis`
+  / `--chart-grid` custom property) to `<XAxis>` / `<YAxis>` / `<CartesianGrid>`
+  and a `<Legend>` wrapperStyle colour.
 
 ## Nice to have
 

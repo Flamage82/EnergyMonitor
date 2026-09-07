@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  ResponsiveContainer, ComposedChart, Area, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ComposedChart, Area, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 import { config } from "../config";
 import { useTodaySeries } from "../hooks/useSeries";
@@ -14,6 +14,12 @@ const KEY = "energychart.range";
 const initialRange = (): Range => {
   try { return localStorage.getItem(KEY) === "month" ? "month" : "today"; } catch { return "today"; }
 };
+
+// Raw feed watts carry ~10 decimal places — round to whole watts for the tooltip.
+const wattTip = (v: unknown) => `${Math.round(Number(v)).toLocaleString()} W`;
+const hourTip = (t: unknown) =>
+  new Date(Number(t)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const kwhTip = (v: unknown) => `${Number(v).toFixed(1)} kWh`;
 
 export function EnergyChart({ month }: { month: AsyncState<GroupBucket[]> }) {
   const [range, setRange] = useState<Range>(initialRange);
@@ -34,18 +40,22 @@ export function EnergyChart({ month }: { month: AsyncState<GroupBucket[]> }) {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="t" tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })} />
             <YAxis tickFormatter={(n) => `${Math.round(n / 100) / 10} kW`} />
-            <Tooltip />
-            <Area type="monotone" dataKey="main" stackId="load" stroke="#2563eb" fill="#93c5fd" name="Main house" />
-            <Area type="monotone" dataKey="nicki" stackId="load" stroke="#7c3aed" fill="#c4b5fd" name="Nicki" />
-            <Line type="monotone" dataKey="solar" stroke="#f59e0b" dot={false} name="Solar" />
+            <Tooltip formatter={wattTip} labelFormatter={hourTip} />
+            <Legend />
+            {/* Stacked household load: blue (main) under aqua (Nicki) — distinct
+                hues (the old blue/violet pair was not), each with a 2px outline
+                so the boundary between the two fills stays legible. */}
+            <Area type="monotone" dataKey="main" stackId="load" stroke="var(--chart-main)" strokeWidth={2} fill="var(--chart-main)" fillOpacity={0.7} name="Main house" />
+            <Area type="monotone" dataKey="nicki" stackId="load" stroke="var(--chart-nicki)" strokeWidth={2} fill="var(--chart-nicki)" fillOpacity={0.85} name="Nicki" />
+            <Line type="monotone" dataKey="solar" stroke="var(--chart-solar)" strokeWidth={2} dot={false} name="Solar" />
           </ComposedChart>
         ) : (
           <ComposedChart data={toMonthDayPoints(month.data ?? [], config.monthBucketSeconds, config.timezone)}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(8)} />
             <YAxis tickFormatter={(n) => `${Math.round(n)} kWh`} />
-            <Tooltip />
-            <Bar dataKey="netImportKwh" fill="#2563eb" name="Net import (kWh)" />
+            <Tooltip formatter={kwhTip} />
+            <Bar dataKey="netImportKwh" fill="var(--chart-main)" name="Net import" />
           </ComposedChart>
         )}
       </ResponsiveContainer>
