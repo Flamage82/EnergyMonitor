@@ -61,7 +61,10 @@ const hourGrid = <CartesianGrid strokeDasharray="3 3" stroke={grid} />;
 const hourX = (
   <XAxis dataKey="t" stroke={axis} tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })} />
 );
-const kwY = <YAxis stroke={axis} tickFormatter={(n) => `${Math.round(n / 100) / 10} kW`} />;
+// No intraday series is ever negative (loads are areas, solar is flipped
+// positive), so pin the axis floor at zero — Recharts' auto-domain otherwise
+// pads a big empty band below the data.
+const kwY = <YAxis stroke={axis} domain={[0, "auto"]} tickFormatter={(n) => `${Math.round(n / 100) / 10} kW`} />;
 const wattTooltip = <Tooltip {...tooltipProps} formatter={wattTip} labelFormatter={hourTip} />;
 
 function TodayChart({ buckets }: { buckets: GroupBucket[] }) {

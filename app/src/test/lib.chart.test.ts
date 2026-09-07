@@ -9,6 +9,10 @@ describe("toTodayPoints", () => {
   it("passes watts straight through with positive solar", () => {
     expect(toTodayPoints([b(1000, 500, 100, 300)])).toEqual([{ t: 1000, main: 500, nicki: 100, solar: 300 }]);
   });
+
+  it("floors a negative reading (measurement noise) to zero", () => {
+    expect(toTodayPoints([b(1000, 500, 100, -12)])).toEqual([{ t: 1000, main: 500, nicki: 100, solar: 0 }]);
+  });
 });
 
 describe("toTodayLoadPoints", () => {
@@ -27,6 +31,11 @@ describe("toTodayLoadPoints", () => {
   it("flips a solar group to positive generation", () => {
     const pts = toTodayLoadPoints([fb(1000, { 1: 0, 3: 0, 4: 0, 5: -1200 })], groups, [5]);
     expect(pts[0].Solar).toBe(1200);
+  });
+
+  it("floors a solar group reading positive (drift in low light) to zero", () => {
+    const pts = toTodayLoadPoints([fb(1000, { 1: 0, 3: 0, 4: 0, 5: 8 })], groups, [5]);
+    expect(pts[0].Solar).toBe(0);
   });
 });
 
