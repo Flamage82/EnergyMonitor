@@ -2,29 +2,29 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import { usePolledFetch } from "../hooks/usePolledFetch";
 import { useMonthData } from "../hooks/useSeries";
+import { useLiveFeeds } from "../hooks/useLiveFeeds";
+import { config } from "../config";
 import * as api from "../api/worker";
 
 describe("usePolledFetch", () => {
-  // @testing-library's waitFor only drives fake timers when a `jest` global with
-  // `advanceTimersByTime` exists. Vitest has no `jest` global, so we shim one that
-  // forwards to Vitest's fake-timer API. Scoped install/remove keeps this from
-  // leaking into other describe blocks.
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.stubGlobal("jest", {
-      advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms),
-    });
-  });
+  beforeEach(() => vi.useFakeTimers());
   afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.runOnlyPendingTimers();
+    // Discard pending fake timers WITHOUT running them: executing the hook's
+    // setInterval here would setState on an about-to-unmount component and trip
+    // React's "not wrapped in act(...)" warning.
+    vi.clearAllTimers();
     vi.useRealTimers();
   });
+
+  // The mount effect starts an async loader whose resolution setState lands a
+  // tick later; flush it inside act() so nothing escapes.
+  const flush = () => act(async () => { await vi.advanceTimersByTimeAsync(0); });
 
   it("loads immediately then again after the interval", async () => {
     const loader = vi.fn(async () => 42);
     const { result } = renderHook(() => usePolledFetch(loader, 1000, []));
-    await waitFor(() => expect(result.current.data).toBe(42));
+    await flush();
+    expect(result.current.data).toBe(42);
     expect(loader).toHaveBeenCalledTimes(1);
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(loader).toHaveBeenCalledTimes(2);
@@ -35,10 +35,30 @@ describe("usePolledFetch", () => {
       .mockResolvedValueOnce("ok")
       .mockRejectedValueOnce(new Error("boom"));
     const { result } = renderHook(() => usePolledFetch(loader, 1000, []));
-    await waitFor(() => expect(result.current.data).toBe("ok"));
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    await waitFor(() => expect(result.current.error).toMatch(/boom/));
+    await flush();
     expect(result.current.data).toBe("ok");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(result.current.error).toMatch(/boom/);
+    expect(result.current.data).toBe("ok");
+  });
+});
+
+describe("useLiveFeeds", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("polls fetchLive with the configured base url and every feed id", async () => {
+    const spy = vi.spyOn(api, "fetchLive").mockResolvedValue({ 384745: 100 } as api.LiveValues);
+    const { result } = renderHook(() => useLiveFeeds());
+    await waitFor(() => expect(result.current.data).toEqual({ 384745: 100 }));
+    expect(spy).toHaveBeenCalledWith("https://worker.test", config.allFeedIds, expect.anything());
+  });
+
+  it("surfaces a fetch failure as an error string", async () => {
+    vi.spyOn(api, "fetchLive").mockRejectedValue(new Error("proxy responded 502"));
+    const { result } = renderHook(() => useLiveFeeds());
+    await waitFor(() => expect(result.current.error).toMatch(/502/));
   });
 });
 

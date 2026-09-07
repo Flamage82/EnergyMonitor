@@ -32,17 +32,17 @@ export async function proxy(
 ): Promise<Response> {
   const cache = caches.default;
   // Cache key is derived from the client-facing URL only — it must never
-  // contain the apikey we add below.
+  // carry the credential we attach to the upstream request below.
   const cacheKey = new Request(clientUrl);
   const hit = await cache.match(cacheKey);
   if (hit) return hit;
 
-  upstreamURL.searchParams.set("apikey", env.EMONCMS_KEY);
-
   let upstreamRes: Response;
   try {
     upstreamRes = await fetch(upstreamURL.toString(), {
-      headers: { Accept: "application/json" },
+      // Key in a header, not a query param: Cloudflare records subrequest URLs,
+      // so `?apikey=` would surface the key in `wrangler tail` and Workers Logs.
+      headers: { Accept: "application/json", Authorization: `Bearer ${env.EMONCMS_KEY}` },
     });
   } catch {
     return jsonError("upstream fetch failed", env, 502);
@@ -143,7 +143,8 @@ export default {
       upstream.searchParams.set("timeformat", "unixms");
 
       // Cache key built from the normalized + clamped values, never the raw
-      // client URL (and never the apikey, which proxy() adds upstream-side).
+      // client URL (and never the API key, which proxy() sends as an
+      // Authorization header on the upstream request only).
       const cacheKey =
         `https://cache/series?ids=${ids.join(",")}&start=${startMs}&end=${endMs}&interval=${interval}`;
 

@@ -22,6 +22,10 @@ jobs:
       - run: npm ci
       - run: npm run test
       - run: npm run build
+        env:
+          # Compile-check only — the real value is injected by deploy.yml. vite
+          # fails the build if this is unset (see app/vite.config.ts).
+          VITE_WORKER_URL: https://ci-placeholder.invalid
 
   worker:
     runs-on: ubuntu-latest

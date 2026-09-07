@@ -16,6 +16,9 @@
   --chart-main: #2a78d6;
   --chart-nicki: #1baf7a;
   --chart-solar: #eda100;
+  /* Recharts axis lines / tick labels / legend text, and the cartesian grid. */
+  --chart-axis: #6b7280;
+  --chart-grid: #e2e5ea;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -36,6 +39,8 @@
     --chart-main: #3987e5;
     --chart-nicki: #199e70;
     --chart-solar: #c98500;
+    --chart-axis: #9aa0aa;
+    --chart-grid: #2b2f37;
   }
 }
 

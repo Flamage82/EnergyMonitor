@@ -21,6 +21,24 @@ export function integrateKwh(watts: number, bucketSeconds: number): number {
   return (watts * bucketSeconds) / 3_600_000;
 }
 
+/**
+ * The real spacing of the returned buckets, in seconds — the median gap between
+ * consecutive timestamps. emoncms rounds the requested `interval` up to a
+ * multiple of the feed's native interval, so trusting the config value when
+ * integrating watts→kWh would silently scale every figure on a mismatch. Falls
+ * back to `fallbackSeconds` for a series too short to measure.
+ */
+export function inferBucketSeconds(buckets: GroupBucket[], fallbackSeconds: number): number {
+  const deltas: number[] = [];
+  for (let i = 1; i < buckets.length; i++) {
+    const d = (buckets[i].tMs - buckets[i - 1].tMs) / 1000;
+    if (d > 0) deltas.push(d);
+  }
+  if (deltas.length === 0) return fallbackSeconds;
+  deltas.sort((a, b) => a - b);
+  return deltas[Math.floor(deltas.length / 2)];
+}
+
 export function buildBuckets(series: MultiFeedSeries, groups: FeedGroups): GroupBucket[] {
   const byId = new Map(series.map((s) => [Number(s.feedid), s.data]));
   const all = [...groups.main, ...groups.nicki, ...groups.solar];
@@ -72,7 +90,10 @@ export function buildBuckets(series: MultiFeedSeries, groups: FeedGroups): Group
       tMs,
       mainW: main.sum,
       nickiW: nicki.sum,
-      solarW: -solar.sum, // feed is negative when generating
+      // Feed is negative when generating. `|| 0` collapses the `-0` that a
+      // zero-generation sum would otherwise produce, so bucket equality in tests
+      // and downstream comparisons stay predictable.
+      solarW: -solar.sum || 0,
       partial: main.missing || nicki.missing || solar.missing,
     });
   }
@@ -88,7 +109,7 @@ export interface HouseholdBill {
 }
 export interface BillResult { mainHouse: HouseholdBill; nicki: HouseholdBill; gaps: number; }
 
-interface AllocateOpts {
+export interface AllocateOpts {
   bucketSeconds: number;
   tariff: Tariff;
   shares: Shares;
@@ -100,7 +121,9 @@ export function allocateBill(buckets: GroupBucket[], opts: AllocateOpts): BillRe
   const { bucketSeconds, tariff, shares, solarAllocation, daysElapsed } = opts;
   const importRate = tariff.importCentsPerKwh / 100;
   const fitRate = tariff.feedInCentsPerKwh / 100;
-  const totalShares = shares.mainHouse + shares.nicki;
+  // `|| 1` guards the share-split divisions below against a misconfigured
+  // `{ mainHouse: 0, nicki: 0 }` producing NaN dollar figures.
+  const totalShares = shares.mainHouse + shares.nicki || 1;
 
   const main = { importKwh: 0, importCost: 0, solarCreditShare: 0 };
   const nicki = { importKwh: 0, importCost: 0, solarCreditShare: 0 };

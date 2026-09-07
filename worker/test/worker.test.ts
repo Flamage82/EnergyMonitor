@@ -62,12 +62,16 @@ describe("worker /live", () => {
     });
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:5173");
     expect(res.headers.get("Cache-Control")).toContain("s-maxage=10");
-    const calledUrl = (globalThis.fetch as any).mock.calls[0][0] as string;
+    const call = (globalThis.fetch as any).mock.calls[0];
+    const calledUrl = call[0] as string;
     expect(calledUrl).toContain("emoncms.org/feed/fetch.json");
     expect(calledUrl).toContain("ids=384745");
-    expect(calledUrl).toContain("apikey=test-key");
-    // apikey is server-side only: it must not leak to the client-facing
-    // response or the cache key.
+    // The key travels as an Authorization header, never in the upstream URL.
+    expect(calledUrl).not.toContain("apikey");
+    expect(calledUrl).not.toContain("test-key");
+    const sentHeaders = new Headers(call[1]?.headers as HeadersInit);
+    expect(sentHeaders.get("Authorization")).toBe("Bearer test-key");
+    // ...and it must not leak to the client-facing response or the cache key.
     expect(res.url).not.toContain("apikey");
     expect(JSON.stringify([...res.headers])).not.toContain("test-key");
     const cached = await caches.default.match(new Request(LIVE_KEY));

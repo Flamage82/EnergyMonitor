@@ -33,9 +33,10 @@ Then run `npm run dev` to start `wrangler dev` on http://localhost:8787.
 `@cloudflare/vitest-pool-workers`, and `npm run types` regenerates the Worker binding
 types.
 
-**Terminal 2 — `app/`:** run `npm install` once. There is no working default Worker
-URL — the fallback in `app/src/config.ts` is a dead `example.workers.dev` placeholder —
-so you must create `app/.env.local` with a real one:
+**Terminal 2 — `app/`:** run `npm install` once. There is no default Worker URL —
+`app/src/config.ts` falls back to `""`, and with a blank base the app renders a
+"dashboard not configured" notice instead of calling anything — so you must create
+`app/.env.local` with a real one:
 
 ```
 VITE_WORKER_URL=http://localhost:8787
@@ -72,8 +73,8 @@ reaches the browser.
 2. **GitHub — set the Worker URL variable. Required.** Repo **Settings → Secrets and
    variables → Actions → Variables → New repository variable**. Name `WORKER_URL`,
    value = the Worker URL from step 1. The build injects it as `VITE_WORKER_URL`.
-   Skipping this deploys a site that builds and publishes green but whose live data
-   and bill never load (the `app/src/config.ts` fallback is only a dead placeholder).
+   Skipping this now **fails the deploy build** (`app/vite.config.ts` throws on an
+   unset `VITE_WORKER_URL` for `vite build`) rather than publishing a dead site.
 
 3. **GitHub — enable Pages.** Repo **Settings → Pages → Build and deployment → Source
    → GitHub Actions**.
@@ -98,6 +99,9 @@ reaches the browser.
 - `bucketSeconds` — chart aggregation bucket size (currently 300).
 - `livePollMs`, `billRecomputeMs`, `todayRefreshMs` — poll / refresh intervals.
 - `dataStartDate` — data floor for the month-to-date bill and "this month" chart;
-  set to the feed-reconfiguration date, and safe to delete after 2026-09.
+  set to the feed-reconfiguration date. Once a billing month starts after this date
+  the `Math.max` in `effectiveMonthWindow` always picks the month start, so the key
+  stops having any effect — but fully removing it still means editing
+  `lib/time.ts` and its callers, so it is simplest to leave it in place.
 
 Changing any of these requires a commit to `main` to take effect on the live site.
