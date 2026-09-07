@@ -30,7 +30,7 @@ describe("fetchLive", () => {
 
 describe("fetchSeries", () => {
   it("requests the series endpoint with minute-rounded bounds", async () => {
-    const spy = vi.fn(async () => new Response(JSON.stringify([{ feedid: "1", data: [] }]), { status: 200 }));
+    const spy = vi.fn(async (_url: string | URL | Request) => new Response(JSON.stringify([{ feedid: "1", data: [] }]), { status: 200 }));
     vi.stubGlobal("fetch", spy);
     await fetchSeries("https://w", { ids: [1, 2], startMs: 1788184801234, endMs: 1788184999999, intervalSeconds: 300 });
     const url = spy.mock.calls[0][0] as string;
