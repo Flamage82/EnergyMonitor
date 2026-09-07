@@ -4,6 +4,8 @@ import * as liveHook from "../hooks/useLiveFeeds";
 import * as todayHook from "../hooks/useSeries";
 import { LiveNow } from "../components/LiveNow";
 import { EnergyChart } from "../components/EnergyChart";
+import * as seriesHook from "../hooks/useSeries";
+import { BillSummary } from "../components/BillSummary";
 
 function mockLive(values: Record<number, number>) {
   vi.spyOn(liveHook, "useLiveFeeds").mockReturnValue({
@@ -52,5 +54,24 @@ describe("<EnergyChart>", () => {
     unmount();
     render(<EnergyChart />);
     expect(screen.getByRole("button", { name: /month/i })).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("<BillSummary>", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders a total for each household", () => {
+    vi.spyOn(seriesHook, "useMonthData").mockReturnValue({
+      data: [
+        { tMs: Date.parse("2026-08-31T14:00:00Z"), mainW: 1000, nickiW: 500, solarW: 200, partial: false },
+      ],
+      error: null, loading: false, lastUpdated: Date.now(),
+    });
+    render(<BillSummary />);
+    expect(screen.getByTestId("bill-main")).toHaveTextContent("$");
+    expect(screen.getByTestId("bill-nicki")).toHaveTextContent("$");
+    expect(screen.getByText(/estimate/i)).toBeInTheDocument();
   });
 });
