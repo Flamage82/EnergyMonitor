@@ -12,30 +12,40 @@ components are built on top of this scaffold in later tasks.
 
 ## Local development
 
-`app/`: run `npm install` once, then `npm run dev` to start the Vite dev server on
-http://localhost:5173. Use `npm run build` for a production build (`tsc -b && vite build`)
-and `npm run test` (Vitest) for the unit tests. By default the dev app talks to the
-deployed Worker (the fallback URL in `app/src/config.ts`); set `VITE_WORKER_URL` in
-`app/.env.local` to point at a different Worker.
+Local development needs both packages running: the Worker (so the app has an API to
+call) and the Vite dev server. Use two terminals.
 
-`worker/`: run `npm install` once. Create a `worker/.dev.vars` file containing
-`EMONCMS_KEY=<key>`, where the key is the read-only emoncms API key stored at
-`C:\Dropbox\EmonCmsApiKey.txt`. Then run `npm run dev` to start `wrangler dev` on
-http://localhost:8787. `npm run test` runs the Vitest suite in the workerd runtime via
+**Terminal 1 — `worker/`:** run `npm install` once. Create a `worker/.dev.vars` file
+containing:
+
+```
+EMONCMS_KEY=<key>
+ALLOWED_ORIGIN=http://localhost:5173
+```
+
+`<key>` is the read-only emoncms API key stored at `C:\Dropbox\EmonCmsApiKey.txt`.
+`.dev.vars` overrides `wrangler.jsonc` vars and is git-ignored — the `ALLOWED_ORIGIN`
+line is needed because `wrangler.jsonc` pins the production Pages origin
+(`https://flamage82.github.io`), which would otherwise CORS-block the dev server.
+Then run `npm run dev` to start `wrangler dev` on http://localhost:8787.
+
+`npm run test` runs the Vitest suite in the workerd runtime via
 `@cloudflare/vitest-pool-workers`, and `npm run types` regenerates the Worker binding
 types.
 
-`ALLOWED_ORIGIN` gotcha: `worker/wrangler.jsonc` sets `ALLOWED_ORIGIN` to the production
-Pages origin (`https://flamage82.github.io`), so a locally-run `wrangler dev` Worker
-will CORS-block requests from `npm run dev` (http://localhost:5173). To test the app
-against a local Worker, add this line to `worker/.dev.vars` (it overrides
-`wrangler.jsonc` vars and is git-ignored):
+**Terminal 2 — `app/`:** run `npm install` once. There is no working default Worker
+URL — the fallback in `app/src/config.ts` is a dead `example.workers.dev` placeholder —
+so you must create `app/.env.local` with a real one:
 
 ```
-# ALLOWED_ORIGIN=http://localhost:5173
+VITE_WORKER_URL=http://localhost:8787
 ```
 
-Otherwise just run the app against the deployed Worker (the default).
+Use `http://localhost:8787` to hit the local `wrangler dev` Worker from terminal 1, or
+paste the deployed Worker URL to develop against production data. Then run
+`npm run dev` to start the Vite dev server on http://localhost:5173. `npm run build`
+does a production build (`tsc -b && vite build`) and `npm run test` (Vitest) runs the
+unit tests.
 
 ## Deploy
 
@@ -59,10 +69,11 @@ reaches the browser.
 
    Copy the URL Wrangler prints, e.g. `https://marburg-energy-proxy.<subdomain>.workers.dev`.
 
-2. **GitHub — set the Worker URL variable.** Repo **Settings → Secrets and variables →
-   Actions → Variables → New repository variable**. Name `WORKER_URL`, value = the
-   Worker URL from step 1. The build injects it as `VITE_WORKER_URL`; if it is unset
-   the build falls back to the literal in `app/src/config.ts`.
+2. **GitHub — set the Worker URL variable. Required.** Repo **Settings → Secrets and
+   variables → Actions → Variables → New repository variable**. Name `WORKER_URL`,
+   value = the Worker URL from step 1. The build injects it as `VITE_WORKER_URL`.
+   Skipping this deploys a site that builds and publishes green but whose live data
+   and bill never load (the `app/src/config.ts` fallback is only a dead placeholder).
 
 3. **GitHub — enable Pages.** Repo **Settings → Pages → Build and deployment → Source
    → GitHub Actions**.

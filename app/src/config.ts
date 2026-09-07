@@ -22,9 +22,11 @@ const shares: Shares = { mainHouse: 4, nicki: 1 };
 
 export const config = {
   workerBaseUrl:
-    (import.meta.env.VITE_WORKER_URL as string | undefined) ??
+    (import.meta.env.VITE_WORKER_URL as string | undefined) ||
     // Set the GitHub Actions repo variable WORKER_URL (see README > Deploy) to the
-    // deployed Worker URL. This literal is only the last-resort fallback.
+    // deployed Worker URL. `||` (not `??`) so an empty-string VITE_WORKER_URL — what
+    // an unset `${{ vars.WORKER_URL }}` renders as — also falls through to this
+    // last-resort placeholder rather than becoming the base URL.
     "https://marburg-energy-proxy.example.workers.dev",
   timezone: "Australia/Brisbane",
   // Feeds were reconfigured on this date (Australia/Brisbane local). Data before
