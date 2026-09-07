@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import * as liveHook from "../hooks/useLiveFeeds";
 import * as seriesHook from "../hooks/useSeries";
@@ -46,6 +46,9 @@ describe("<LiveNow>", () => {
 });
 
 describe("<EnergyChart>", () => {
+  // Clear before as well as after so this block's isolation doesn't depend on
+  // test order (a stray `energychart.range` from elsewhere would flip a default).
+  beforeEach(() => localStorage.clear());
   afterEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
@@ -66,6 +69,12 @@ describe("<EnergyChart>", () => {
     vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
     render(<EnergyChart month={monthState([])} />);
     expect(monthSpy).not.toHaveBeenCalled();
+  });
+
+  it("gives the range toggle an accessible name", () => {
+    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    render(<EnergyChart month={monthState([])} />);
+    expect(screen.getByRole("group", { name: "Chart range" })).toBeInTheDocument();
   });
 });
 
@@ -88,9 +97,11 @@ describe("<BillSummary>", () => {
     expect(screen.getByText(/estimate/i)).toBeInTheDocument();
   });
 
-  it("notes the data-floor window when the floor is in effect", () => {
+  it("notes the excluded pre-monitoring days when the data floor is in effect", () => {
     render(<BillSummary now={now} month={monthState(buckets)} />);
-    expect(screen.getByText(/Covers 2026-09-07 onwards/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Excludes 1–6 Sept \(before monitoring was reconfigured\)\./),
+    ).toBeInTheDocument();
   });
 
   it("reports data gaps from partial buckets", () => {

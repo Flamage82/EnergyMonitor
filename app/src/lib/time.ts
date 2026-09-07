@@ -34,8 +34,21 @@ export function monthStartMs(now: Date, timeZone: string): number {
   return zonedTimeToUtcMs(p.year, p.month, 1, 0, 0, 0, timeZone);
 }
 
-export function daysElapsedInMonth(now: Date, timeZone: string): number {
-  return (now.getTime() - monthStartMs(now, timeZone)) / 86_400_000;
+/**
+ * The billing window that both the month query and the bill must agree on: the
+ * later of the calendar month start and the `dataStartDate` floor. Deriving the
+ * fetched buckets and the supply-charge proration from one place stops the bill
+ * charging supply for days it has no usage data for.
+ */
+export function effectiveMonthWindow(now: Date, timeZone: string, dataStartDate: string) {
+  const monthStart = monthStartMs(now, timeZone);
+  const startMs = Math.max(monthStart, localDateStartMs(dataStartDate, timeZone));
+  return {
+    startMs,
+    monthStart,
+    floored: startMs > monthStart,
+    daysElapsed: (now.getTime() - startMs) / 86_400_000,
+  };
 }
 
 export function localDayKey(tMs: number, timeZone: string): string {

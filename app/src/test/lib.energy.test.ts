@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { allocateBill, buildBuckets, integrateKwh, type MultiFeedSeries, type FeedGroups, type GroupBucket } from "../lib/energy";
+import { allocateBill, buildBuckets, inferBucketSeconds, integrateKwh, type MultiFeedSeries, type FeedGroups, type GroupBucket } from "../lib/energy";
 
 const groups: FeedGroups = { main: [1, 2], nicki: [9], solar: [5] };
 
@@ -85,6 +85,49 @@ describe("buildBuckets", () => {
     expect(b[2].partial).toBe(false);
     expect(b[3].partial).toBe(true);
     expect(b[4].partial).toBe(false);
+  });
+});
+
+describe("buildBuckets solar sign", () => {
+  it("emits +0 (not -0) when the solar feeds sum to exactly zero", () => {
+    const series: MultiFeedSeries = [
+      { feedid: "1", data: [[0, 100]] },
+      { feedid: "2", data: [[0, 0]] },
+      { feedid: "9", data: [[0, 0]] },
+      { feedid: "5", data: [[0, 0]] },
+    ];
+    const solarW = buildBuckets(series, groups)[0].solarW;
+    expect(Object.is(solarW, -0)).toBe(false);
+    expect(solarW).toBe(0);
+  });
+});
+
+describe("inferBucketSeconds", () => {
+  const at = (tMs: number): GroupBucket => ({ tMs, mainW: 0, nickiW: 0, solarW: 0, partial: false });
+
+  it("returns the median gap between consecutive timestamps", () => {
+    const buckets = [at(0), at(900_000), at(1_800_000), at(2_700_000)];
+    expect(inferBucketSeconds(buckets, 300)).toBe(900);
+  });
+
+  it("shrugs off a single large gap (data drop-out) via the median", () => {
+    const buckets = [at(0), at(900_000), at(9_000_000), at(9_900_000), at(10_800_000)];
+    expect(inferBucketSeconds(buckets, 300)).toBe(900);
+  });
+
+  it("falls back when the series is too short to measure", () => {
+    expect(inferBucketSeconds([], 300)).toBe(300);
+    expect(inferBucketSeconds([at(0)], 300)).toBe(300);
+  });
+});
+
+describe("allocateBill share guard", () => {
+  it("does not divide by zero when both shares are zero", () => {
+    const r = allocateBill(exporting, {
+      ...base, shares: { mainHouse: 0, nicki: 0 }, daysElapsed: 5, solarAllocation: "proportional",
+    });
+    expect(Number.isNaN(r.mainHouse.total)).toBe(false);
+    expect(Number.isNaN(r.nicki.supplyChargeShare)).toBe(false);
   });
 });
 
