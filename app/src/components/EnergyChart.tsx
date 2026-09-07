@@ -42,8 +42,9 @@ const legendStyle = { color: "var(--chart-axis)" };
 // The tooltip needs the same dark-theme treatment the axes got — Recharts hard-
 // codes a white panel. `zIndex` lifts it above the legend wrapper, which Recharts
 // renders after it in the DOM (so an overlap would otherwise paint legend text
-// over the panel); `itemStyle` colour keeps the readout text in readable ink
-// while the coloured bullet still carries series identity.
+// over the panel). We leave `itemStyle.color` unset so each row keeps the series
+// colour Recharts puts on it inline — App.css then pins the value and separator
+// back to plain ink, leaving just the series name coloured.
 const tooltipProps = {
   wrapperStyle: { zIndex: 10 },
   contentStyle: {
@@ -53,7 +54,7 @@ const tooltipProps = {
     boxShadow: "var(--shadow)",
   },
   labelStyle: { color: "var(--muted)" },
-  itemStyle: { color: "var(--text)", padding: "1px 0" },
+  itemStyle: { padding: "1px 0" },
 } as const;
 
 // Shared chrome for the two intraday (watts-over-hours) charts.
