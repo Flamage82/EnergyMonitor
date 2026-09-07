@@ -3,5 +3,5 @@ import App from "./App";
 
 test("renders the dashboard shell", () => {
   render(<App />);
-  expect(screen.getByText("Energy dashboard")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 1, name: "Marburg Energy" })).toBeInTheDocument();
 });

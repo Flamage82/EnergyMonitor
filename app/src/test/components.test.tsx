@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import * as liveHook from "../hooks/useLiveFeeds";
-import * as todayHook from "../hooks/useSeries";
+import * as seriesHook from "../hooks/useSeries";
+import App from "../App";
 import { LiveNow } from "../components/LiveNow";
 import { EnergyChart } from "../components/EnergyChart";
-import * as seriesHook from "../hooks/useSeries";
 import { BillSummary } from "../components/BillSummary";
 
 function mockLive(values: Record<number, number>) {
@@ -46,8 +46,8 @@ describe("<EnergyChart>", () => {
   });
 
   it("remembers the selected range in localStorage", () => {
-    vi.spyOn(todayHook, "useTodaySeries").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
-    vi.spyOn(todayHook, "useMonthData").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    vi.spyOn(seriesHook, "useMonthData").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
     const { unmount } = render(<EnergyChart />);
     fireEvent.click(screen.getByRole("button", { name: /month/i }));
     expect(localStorage.getItem("energychart.range")).toBe("month");
@@ -73,5 +73,24 @@ describe("<BillSummary>", () => {
     expect(screen.getByTestId("bill-main")).toHaveTextContent("$");
     expect(screen.getByTestId("bill-nicki")).toHaveTextContent("$");
     expect(screen.getByText(/estimate/i)).toBeInTheDocument();
+  });
+});
+
+describe("<App>", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders the header and all three sections", () => {
+    vi.spyOn(liveHook, "useLiveFeeds").mockReturnValue({
+      data: {}, error: null, loading: false, lastUpdated: Date.now(),
+    });
+    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    vi.spyOn(seriesHook, "useMonthData").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    render(<App />);
+    expect(screen.getByRole("heading", { level: 1, name: "Marburg Energy" })).toBeInTheDocument();
+    expect(screen.getByText("Right now")).toBeInTheDocument();
+    expect(screen.getByText("Usage")).toBeInTheDocument();
+    expect(screen.getByText(/Bill so far/)).toBeInTheDocument();
   });
 });

@@ -1,0 +1,212 @@
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --border: #e2e5ea;
+  --text: #1a1d21;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --import: #b91c1c;
+  --import-bg: #fee2e2;
+  --export: #15803d;
+  --export-bg: #dcfce7;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115;
+    --card: #181b21;
+    --border: #2b2f37;
+    --text: #e8eaed;
+    --muted: #9aa0aa;
+    --accent: #60a5fa;
+    --import: #f87171;
+    --import-bg: #3b1416;
+    --export: #4ade80;
+    --export-bg: #10331d;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1rem 1rem 3rem;
+}
+
+.app > header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  padding: 0.5rem 0 1rem;
+}
+
+.section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.15rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.section h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.section h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.banner {
+  background: var(--import-bg);
+  color: var(--import);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 0.6rem;
+}
+
+.live-headline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.live-headline > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.live-headline strong {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.net {
+  display: inline-block;
+  font-weight: 600;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+.net[data-state="importing"] {
+  color: var(--import);
+  background: var(--import-bg);
+}
+
+.net[data-state="exporting"] {
+  color: var(--export);
+  background: var(--export-bg);
+}
+
+.circuits {
+  list-style: none;
+  padding: 0;
+  margin: 0.9rem 0 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem 1.25rem;
+}
+
+.circuits li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+  padding: 0.25rem 0;
+}
+
+.toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 0.85rem;
+}
+
+.toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0.4rem 0.9rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.toggle button + button {
+  border-left: 1px solid var(--border);
+}
+
+.toggle button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.bill-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+@media (min-width: 520px) {
+  .bill-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.bill-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+}
+
+.bill-card dl {
+  margin: 0;
+}
+
+.bill-card dl > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  padding: 0.15rem 0;
+}
+
+.bill-card dt {
+  color: var(--muted);
+}
+
+.bill-card .total {
+  border-top: 1px solid var(--border);
+  margin-top: 0.35rem;
+  padding-top: 0.4rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.bill-card .total dt {
+  color: var(--text);
+}
