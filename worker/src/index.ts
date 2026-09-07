@@ -79,6 +79,35 @@ export default {
       return proxy(request.url, upstream, env, ctx, 10);
     }
 
+    if (url.pathname === "/series") {
+      const idsRaw = (url.searchParams.get("ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      const start = url.searchParams.get("start");
+      const end = url.searchParams.get("end");
+      if (idsRaw.length === 0 || !start || !end) return jsonError("ids, start, end required", env, 400);
+
+      const allowed = new Set<number>(FEED_IDS as readonly number[]);
+      if (!idsRaw.every((id) => allowed.has(Number(id)))) return jsonError("unknown feed id", env, 403);
+
+      const startMs = Number(start);
+      const endMs = Number(end);
+      const span = endMs - startMs;
+      if (!Number.isFinite(span) || span <= 0 || span > 40 * 86400 * 1000) {
+        return jsonError("bad range", env, 400);
+      }
+
+      let interval = Number(url.searchParams.get("interval") ?? "300");
+      if (!Number.isFinite(interval) || interval < 60) interval = 60;
+
+      const upstream = new URL(`${EMONCMS}/feed/data.json`);
+      upstream.searchParams.set("ids", idsRaw.join(","));
+      upstream.searchParams.set("start", String(startMs));
+      upstream.searchParams.set("end", String(endMs));
+      upstream.searchParams.set("interval", String(interval));
+      upstream.searchParams.set("average", "1");
+      upstream.searchParams.set("timeformat", "unixms");
+      return proxy(request.url, upstream, env, ctx, 60);
+    }
+
     return jsonError("not found", env, 404);
   },
 } satisfies ExportedHandler<Env>;

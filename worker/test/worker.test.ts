@@ -12,6 +12,11 @@ afterEach(async () => {
   // Prevent cache bleed: a cached /live 200 must not shadow a later test's
   // upstream assertion.
   await caches.default.delete(new Request("https://w/live"));
+  await caches.default.delete(
+    new Request(
+      "https://w/series?ids=384753&start=1788184800000&end=1788700000000&interval=300",
+    ),
+  );
 });
 
 describe("worker /live", () => {
@@ -53,5 +58,40 @@ describe("worker /live", () => {
     const res = await worker.fetch(new Request("https://w/live"), env, c);
     await waitOnExecutionContext(c);
     expect(res.status).toBe(502);
+  });
+});
+
+describe("worker /series", () => {
+  const q = "ids=384753&start=1788184800000&end=1788700000000&interval=300";
+
+  it("proxies to feed/data.json forcing average=1 and unixms", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce(
+      new Response(JSON.stringify([{ feedid: "384753", data: [[1788184800000, -100]] }]), { status: 200 }),
+    );
+    const c = ctx();
+    const res = await worker.fetch(new Request(`https://w/series?${q}`), env, c);
+    await waitOnExecutionContext(c);
+    expect(res.status).toBe(200);
+    const calledUrl = (globalThis.fetch as any).mock.calls.at(-1)[0] as string;
+    expect(calledUrl).toContain("feed/data.json");
+    expect(calledUrl).toContain("average=1");
+    expect(calledUrl).toContain("timeformat=unixms");
+  });
+
+  it("rejects an unknown feed id with 403", async () => {
+    const res = await worker.fetch(
+      new Request("https://w/series?ids=999999&start=1&end=2&interval=300"), env, ctx());
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects a range over 40 days with 400", async () => {
+    const res = await worker.fetch(
+      new Request(`https://w/series?ids=384753&start=0&end=${41 * 86400 * 1000}&interval=300`), env, ctx());
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects missing start/end with 400", async () => {
+    const res = await worker.fetch(new Request("https://w/series?ids=384753"), env, ctx());
+    expect(res.status).toBe(400);
   });
 });
