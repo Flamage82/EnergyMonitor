@@ -9,6 +9,7 @@ async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
   try {
     res = await fetch(url, { signal });
   } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") throw e;
     throw new Error(`network error contacting proxy: ${(e as Error).message}`);
   }
   if (!res.ok) throw new Error(`proxy responded ${res.status}`);

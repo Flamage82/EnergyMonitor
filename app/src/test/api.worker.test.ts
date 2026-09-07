@@ -14,6 +14,18 @@ describe("fetchLive", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("bad", { status: 502 })));
     await expect(fetchLive("https://w", [1])).rejects.toThrow(/502/);
   });
+
+  it("propagates AbortError without wrapping", async () => {
+    const abortErr = Object.assign(new Error("aborted"), { name: "AbortError" });
+    vi.stubGlobal("fetch", vi.fn(async () => { throw abortErr; }));
+    try {
+      await fetchLive("https://w", [1]);
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect(e).toEqual(abortErr);
+      expect((e as Error).name).toBe("AbortError");
+    }
+  });
 });
 
 describe("fetchSeries", () => {
