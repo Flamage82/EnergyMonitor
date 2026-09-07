@@ -7,18 +7,23 @@ import { usePolledFetch, type AsyncState } from "./usePolledFetch";
 
 const seriesIds = [...config.feeds.main, ...config.feeds.nicki, ...config.feeds.solar];
 
-function useBucketRange(startMs: number, endMs: number, intervalMs: number): AsyncState<GroupBucket[]> {
+function useBucketRange(
+  startMs: number,
+  endMs: number,
+  intervalMs: number,
+  bucketSeconds: number,
+): AsyncState<GroupBucket[]> {
   return usePolledFetch<GroupBucket[]>(
     async (signal) => {
       const series = await fetchSeries(
         config.workerBaseUrl,
-        { ids: seriesIds, startMs, endMs, intervalSeconds: config.bucketSeconds },
+        { ids: seriesIds, startMs, endMs, intervalSeconds: bucketSeconds },
         signal,
       );
       return buildBuckets(series, config.feeds);
     },
     intervalMs,
-    [startMs],
+    [startMs, bucketSeconds],
   );
 }
 
@@ -28,7 +33,7 @@ export function useMonthData(now: Date = new Date()): AsyncState<GroupBucket[]> 
     const floor = localDateStartMs(config.dataStartDate, config.timezone);
     return Math.max(monthStart, floor);
   }, [now]);
-  return useBucketRange(start, now.getTime(), config.billRecomputeMs);
+  return useBucketRange(start, now.getTime(), config.billRecomputeMs, config.monthBucketSeconds);
 }
 
 export function useTodaySeries(now: Date = new Date()): AsyncState<GroupBucket[]> {
@@ -38,5 +43,5 @@ export function useTodaySeries(now: Date = new Date()): AsyncState<GroupBucket[]
     }).format(now).split("-").map(Number);
     return zonedTimeToUtcMs(key[0], key[1], key[2], 0, 0, 0, config.timezone);
   }, [now]);
-  return useBucketRange(start, now.getTime(), config.todayRefreshMs);
+  return useBucketRange(start, now.getTime(), config.todayRefreshMs, config.bucketSeconds);
 }

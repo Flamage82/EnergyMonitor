@@ -1,6 +1,6 @@
 import { config } from "../config";
-import { useMonthData } from "../hooks/useSeries";
-import { allocateBill, type HouseholdBill } from "../lib/energy";
+import type { AsyncState } from "../hooks/usePolledFetch";
+import { allocateBill, type GroupBucket, type HouseholdBill } from "../lib/energy";
 import { localDateStartMs, monthLabel, monthStartMs } from "../lib/time";
 import { Section } from "./Section";
 
@@ -21,9 +21,8 @@ function Card({ testId, name, bill }: { testId: string; name: string; bill: Hous
   );
 }
 
-export function BillSummary() {
-  const now = new Date();
-  const { data, error } = useMonthData(now);
+export function BillSummary({ now, month }: { now: Date; month: AsyncState<GroupBucket[]> }) {
+  const { data, error } = month;
 
   const monthStart = monthStartMs(now, config.timezone);
   const floor = localDateStartMs(config.dataStartDate, config.timezone);
@@ -31,7 +30,7 @@ export function BillSummary() {
   const daysElapsed = (now.getTime() - effStart) / 86_400_000;
 
   const bill = allocateBill(data ?? [], {
-    bucketSeconds: config.bucketSeconds,
+    bucketSeconds: config.monthBucketSeconds,
     tariff: config.tariff,
     shares: config.shares,
     solarAllocation: config.solarAllocation,

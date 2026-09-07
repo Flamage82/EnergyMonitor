@@ -41,6 +41,9 @@ export const config = {
   shares,
   solarAllocation: "proportional" as SolarAllocation,
   bucketSeconds: 300,
+  // Coarser buckets for the whole-month query keep the payload ~1 MB; per spec
+  // §2.3 bucket size does not change the kWh totals.
+  monthBucketSeconds: 900,
   livePollMs: 10_000,
   billRecomputeMs: 180_000,
   todayRefreshMs: 300_000,

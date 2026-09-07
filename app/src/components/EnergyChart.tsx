@@ -3,7 +3,9 @@ import {
   ResponsiveContainer, ComposedChart, Area, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
 import { config } from "../config";
-import { useTodaySeries, useMonthData } from "../hooks/useSeries";
+import { useTodaySeries } from "../hooks/useSeries";
+import type { AsyncState } from "../hooks/usePolledFetch";
+import type { GroupBucket } from "../lib/energy";
 import { toTodayPoints, toMonthDayPoints } from "../lib/chart";
 import { Section } from "./Section";
 
@@ -13,10 +15,9 @@ const initialRange = (): Range => {
   try { return localStorage.getItem(KEY) === "month" ? "month" : "today"; } catch { return "today"; }
 };
 
-export function EnergyChart() {
+export function EnergyChart({ month }: { month: AsyncState<GroupBucket[]> }) {
   const [range, setRange] = useState<Range>(initialRange);
   const today = useTodaySeries();
-  const month = useMonthData();
   const choose = (r: Range) => { setRange(r); try { localStorage.setItem(KEY, r); } catch { /* ignore */ } };
 
   const err = range === "today" ? today.error : month.error;
@@ -39,7 +40,7 @@ export function EnergyChart() {
             <Line type="monotone" dataKey="solar" stroke="#f59e0b" dot={false} name="Solar" />
           </ComposedChart>
         ) : (
-          <ComposedChart data={toMonthDayPoints(month.data ?? [], config.bucketSeconds, config.timezone)}>
+          <ComposedChart data={toMonthDayPoints(month.data ?? [], config.monthBucketSeconds, config.timezone)}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(8)} />
             <YAxis tickFormatter={(n) => `${Math.round(n)} kWh`} />

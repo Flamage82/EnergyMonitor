@@ -16,6 +16,10 @@ describe("config", () => {
   it("carries the feed reconfiguration data-floor date", () => {
     expect(config.dataStartDate).toBe("2026-09-07");
   });
+  it("uses a coarser bucket for the whole-month query", () => {
+    expect(config.bucketSeconds).toBe(300);
+    expect(config.monthBucketSeconds).toBe(900);
+  });
   it("carries the published tariff", () => {
     expect(config.tariff.importCentsPerKwh).toBe(27.83);
     expect(config.tariff.supplyChargeCentsPerDay).toBe(132.484);

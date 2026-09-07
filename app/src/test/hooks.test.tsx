@@ -58,6 +58,8 @@ describe("useMonthData", () => {
     await waitFor(() => expect(result.current.data).not.toBeNull());
     // month start (Sep 1) is before the data-floor (Sep 7), so the floor wins
     expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-09-06T14:00:00Z"));
+    // The whole-month query uses the coarser bucket so the payload stays ~1 MB.
+    expect(spy.mock.calls[0][1].intervalSeconds).toBe(900);
     const bucket = result.current.data![0];
     expect(bucket.nickiW).toBe(200);
     expect(bucket.solarW).toBe(500);
