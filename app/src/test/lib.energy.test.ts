@@ -47,6 +47,33 @@ describe("buildBuckets", () => {
     expect(b[5].nickiW).toBe(60);
   });
 
+  it("takes the timestamp from the first feed that has a point when main[0] is absent", () => {
+    // groups.main[0] === 1 is missing from the response entirely.
+    const series: MultiFeedSeries = [
+      { feedid: "2", data: [[1788184800000, 50], [1788185100000, 60]] },
+      { feedid: "9", data: [[1788184800000, 30], [1788185100000, 40]] },
+      { feedid: "5", data: [[1788184800000, -400], [1788185100000, -10]] },
+    ];
+    const b = buildBuckets(series, groups);
+    expect(b[0].tMs).toBe(1788184800000);
+    expect(b[1].tMs).toBe(1788185100000);
+  });
+
+  it("flags every bucket partial when a feed is missing from the response entirely", () => {
+    const series: MultiFeedSeries = [
+      // feed 1 (main) dropped by the API completely
+      { feedid: "2", data: [[1000, 50], [2000, 60]] },
+      { feedid: "9", data: [[1000, 30], [2000, 40]] },
+      { feedid: "5", data: [[1000, -400], [2000, -10]] },
+    ];
+    const b = buildBuckets(series, groups);
+    expect(b).toHaveLength(2);
+    for (const bucket of b) expect(bucket.partial).toBe(true);
+    // the absent feed contributes 0, so main is just feed 2
+    expect(b[0].mainW).toBe(50);
+    expect(b[1].mainW).toBe(60);
+  });
+
   it("flags a null that follows a feed's first real value as a real gap", () => {
     const series: MultiFeedSeries = [
       { feedid: "1", data: [[0, 100], [1, 100], [2, 100], [3, null], [4, 100]] },

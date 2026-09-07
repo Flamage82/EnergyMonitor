@@ -39,10 +39,18 @@ export function buildBuckets(series: MultiFeedSeries, groups: FeedGroups): Group
     let sum = 0;
     let missing = false;
     for (const id of ids) {
-      const point = byId.get(id)?.[i];
-      const v = point?.[1];
+      const feedData = byId.get(id);
+      if (feedData === undefined) {
+        // The feed is absent from the response entirely (dropped/errored
+        // upstream) — that is a real gap in every bucket, not a quiet zero.
+        missing = true;
+        continue;
+      }
+      const v = feedData[i]?.[1];
       if (v == null) {
         if (i >= (firstIdx.get(id) ?? Infinity)) missing = true;
+        // else: leading null — the feed had not started reporting yet, so it
+        // contributes 0 and is not a gap.
       } else sum += v;
     }
     return { sum, missing };
@@ -53,10 +61,13 @@ export function buildBuckets(series: MultiFeedSeries, groups: FeedGroups): Group
     const main = sumGroup(groups.main, i);
     const nicki = sumGroup(groups.nicki, i);
     const solar = sumGroup(groups.solar, i);
-    const tMs =
-      byId.get(all[0])?.[i]?.[0] ??
-      byId.get(groups.main[0])?.[i]?.[0] ??
-      0;
+    // Take the timestamp from the first feed that actually has a point at this
+    // index — the first configured feed may be missing from the response.
+    let tMs = 0;
+    for (const id of all) {
+      const t = byId.get(id)?.[i]?.[0];
+      if (t != null) { tMs = t; break; }
+    }
     out.push({
       tMs,
       mainW: main.sum,
