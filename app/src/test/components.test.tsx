@@ -4,6 +4,7 @@ import * as liveHook from "../hooks/useLiveFeeds";
 import * as seriesHook from "../hooks/useSeries";
 import type { AsyncState } from "../hooks/usePolledFetch";
 import type { GroupBucket } from "../lib/energy";
+import type { TodaySeries } from "../hooks/useSeries";
 import App from "../App";
 import { LiveNow } from "../components/LiveNow";
 import { EnergyChart } from "../components/EnergyChart";
@@ -12,6 +13,10 @@ import { BillSummary } from "../components/BillSummary";
 const monthState = (data: GroupBucket[]): AsyncState<GroupBucket[]> => ({
   data, error: null, loading: false, lastUpdated: 1,
 });
+
+const todayState = (
+  data: TodaySeries = { buckets: [], feedBuckets: [] },
+): AsyncState<TodaySeries> => ({ data, error: null, loading: false, lastUpdated: 1 });
 
 function mockLive(values: Record<number, number>) {
   vi.spyOn(liveHook, "useLiveFeeds").mockReturnValue({
@@ -55,7 +60,7 @@ describe("<EnergyChart>", () => {
   });
 
   it("remembers the selected range in localStorage", () => {
-    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
     const { unmount } = render(<EnergyChart month={monthState([])} />);
     fireEvent.click(screen.getByRole("button", { name: /month/i }));
     expect(localStorage.getItem("energychart.range")).toBe("month");
@@ -66,15 +71,25 @@ describe("<EnergyChart>", () => {
 
   it("does not mount its own month poll (App owns it)", () => {
     const monthSpy = vi.spyOn(seriesHook, "useMonthData");
-    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
     render(<EnergyChart month={monthState([])} />);
     expect(monthSpy).not.toHaveBeenCalled();
   });
 
   it("gives the range toggle an accessible name", () => {
-    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
     render(<EnergyChart month={monthState([])} />);
     expect(screen.getByRole("group", { name: "Chart range" })).toBeInTheDocument();
+  });
+
+  it("remembers the by-load view and restores it as the pressed button", () => {
+    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
+    const { unmount } = render(<EnergyChart month={monthState([])} />);
+    fireEvent.click(screen.getByRole("button", { name: /by load/i }));
+    expect(localStorage.getItem("energychart.range")).toBe("loads");
+    unmount();
+    render(<EnergyChart month={monthState([])} />);
+    expect(screen.getByRole("button", { name: /by load/i })).toHaveAttribute("aria-pressed", "true");
   });
 });
 
@@ -130,7 +145,7 @@ describe("<App>", () => {
     vi.spyOn(liveHook, "useLiveFeeds").mockReturnValue({
       data: {}, error: null, loading: false, lastUpdated: Date.now(),
     });
-    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
     vi.spyOn(seriesHook, "useMonthData").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
     render(<App />);
     expect(screen.getByRole("heading", { level: 1, name: "Marburg Energy" })).toBeInTheDocument();

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import { usePolledFetch } from "../hooks/usePolledFetch";
-import { useMonthData } from "../hooks/useSeries";
+import { useMonthData, useTodaySeries } from "../hooks/useSeries";
 import { useLiveFeeds } from "../hooks/useLiveFeeds";
 import { config } from "../config";
 import * as api from "../api/worker";
@@ -83,5 +83,27 @@ describe("useMonthData", () => {
     const bucket = result.current.data![0];
     expect(bucket.nickiW).toBe(200);
     expect(bucket.solarW).toBe(500);
+  });
+});
+
+describe("useTodaySeries", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns both the grouped buckets and the per-feed buckets from one fetch", async () => {
+    const spy = vi.spyOn(api, "fetchSeries").mockResolvedValue([
+      { feedid: "384746", data: [[1788184800000, 1000]] }, // Power 1 (main)
+      { feedid: "545440", data: [[1788184800000, 200]] },  // Nicki
+      { feedid: "384753", data: [[1788184800000, -500]] }, // Solar
+    ] as any);
+    const now = new Date("2026-09-08T05:00:00Z");
+    const { result } = renderHook(() => useTodaySeries(now));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+
+    expect(spy.mock.calls[0][1].intervalSeconds).toBe(config.bucketSeconds);
+    expect(result.current.data!.buckets[0].mainW).toBe(1000);
+    expect(result.current.data!.feedBuckets[0].watts[384746]).toBe(1000);
+    expect(result.current.data!.feedBuckets[0].watts[384753]).toBe(-500);
   });
 });

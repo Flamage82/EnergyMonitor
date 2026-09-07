@@ -1,5 +1,5 @@
 import type {
-  FeedGroups, Tariff, Shares, SolarAllocation,
+  FeedGroups, LoadGroup, Tariff, Shares, SolarAllocation,
 } from "./lib/energy";
 
 const feeds: FeedGroups = {
@@ -13,6 +13,20 @@ const feedLabels: Record<number, string> = {
   384750: "Oven", 384751: "Water treatment", 384752: "Air conditioner", 384754: "Pool",
   384753: "Solar", 545440: "Nicki",
 };
+
+// Series for the chart's "by load" view. The two light and two power circuits
+// are each merged into one series so the count lands at eight — the ceiling for
+// a colour-blind-safe categorical line palette. Every feed id appears once.
+const loadGroups: LoadGroup[] = [
+  { label: "Lights", ids: [384745, 384747] },
+  { label: "Power", ids: [384746, 384748] },
+  { label: "Oven", ids: [384750] },
+  { label: "Water treatment", ids: [384751] },
+  { label: "Air conditioner", ids: [384752] },
+  { label: "Pool", ids: [384754] },
+  { label: "Nicki", ids: [545440] },
+  { label: "Solar", ids: [384753] },
+];
 
 const tariff: Tariff = {
   importCentsPerKwh: 27.83,
@@ -28,6 +42,7 @@ interface AppConfig {
   dataStartDate: string;
   feeds: FeedGroups;
   feedLabels: Record<number, string>;
+  loadGroups: LoadGroup[];
   allFeedIds: number[];
   tariff: Tariff;
   shares: Shares;
@@ -56,6 +71,7 @@ export const config = {
   dataStartDate: "2026-09-07",
   feeds,
   feedLabels,
+  loadGroups,
   allFeedIds: [...feeds.main, ...feeds.nicki, ...feeds.solar],
   tariff,
   shares,

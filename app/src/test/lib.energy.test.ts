@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { allocateBill, buildBuckets, inferBucketSeconds, integrateKwh, type MultiFeedSeries, type FeedGroups, type GroupBucket } from "../lib/energy";
+import { allocateBill, buildBuckets, buildFeedBuckets, inferBucketSeconds, integrateKwh, type MultiFeedSeries, type FeedGroups, type GroupBucket } from "../lib/energy";
 
 const groups: FeedGroups = { main: [1, 2], nicki: [9], solar: [5] };
 
@@ -85,6 +85,47 @@ describe("buildBuckets", () => {
     expect(b[2].partial).toBe(false);
     expect(b[3].partial).toBe(true);
     expect(b[4].partial).toBe(false);
+  });
+});
+
+describe("buildFeedBuckets", () => {
+  const ids = [1, 2, 9, 5];
+
+  it("keeps each feed's watts separate per timestamp, raw solar sign", () => {
+    const series: MultiFeedSeries = [
+      { feedid: "1", data: [[1000, 100], [2000, 200]] },
+      { feedid: "2", data: [[1000, 50], [2000, 60]] },
+      { feedid: "9", data: [[1000, 30], [2000, 40]] },
+      { feedid: "5", data: [[1000, -400], [2000, -10]] },
+    ];
+    const b = buildFeedBuckets(series, ids);
+    expect(b[0]).toEqual({ tMs: 1000, watts: { 1: 100, 2: 50, 9: 30, 5: -400 }, partial: false });
+    expect(b[1]).toEqual({ tMs: 2000, watts: { 1: 200, 2: 60, 9: 40, 5: -10 }, partial: false });
+  });
+
+  it("treats a leading null as 0 (not a gap) and a later null as a real gap", () => {
+    const series: MultiFeedSeries = [
+      { feedid: "1", data: [[0, 100], [1, 100], [2, null]] },
+      { feedid: "2", data: [[0, 0], [1, 0], [2, 0]] },
+      { feedid: "9", data: [[0, null], [1, 40], [2, 50]] },
+      { feedid: "5", data: [[0, -10], [1, -10], [2, -10]] },
+    ];
+    const b = buildFeedBuckets(series, [1, 2, 9, 5]);
+    expect(b[0]).toEqual({ tMs: 0, watts: { 1: 100, 2: 0, 9: 0, 5: -10 }, partial: false });
+    expect(b[2].partial).toBe(true); // feed 1 dropped out after reporting
+    expect(b[2].watts[1]).toBe(0);
+  });
+
+  it("flags every bucket partial when a feed is absent from the response", () => {
+    const series: MultiFeedSeries = [
+      { feedid: "2", data: [[1000, 50], [2000, 60]] },
+      { feedid: "9", data: [[1000, 30], [2000, 40]] },
+      { feedid: "5", data: [[1000, -400], [2000, -10]] },
+    ];
+    const b = buildFeedBuckets(series, [1, 2, 9, 5]);
+    expect(b[0].tMs).toBe(1000);
+    expect(b[0].watts[1]).toBe(0);
+    for (const bucket of b) expect(bucket.partial).toBe(true);
   });
 });
 

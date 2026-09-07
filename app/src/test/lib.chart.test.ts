@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { toTodayPoints, toMonthDayPoints } from "../lib/chart";
-import type { GroupBucket } from "../lib/energy";
+import { toTodayPoints, toTodayLoadPoints, toMonthDayPoints } from "../lib/chart";
+import type { FeedBucket, GroupBucket, LoadGroup } from "../lib/energy";
 
 const b = (tMs: number, mainW: number, nickiW: number, solarW: number): GroupBucket =>
   ({ tMs, mainW, nickiW, solarW, partial: false });
@@ -8,6 +8,25 @@ const b = (tMs: number, mainW: number, nickiW: number, solarW: number): GroupBuc
 describe("toTodayPoints", () => {
   it("passes watts straight through with positive solar", () => {
     expect(toTodayPoints([b(1000, 500, 100, 300)])).toEqual([{ t: 1000, main: 500, nicki: 100, solar: 300 }]);
+  });
+});
+
+describe("toTodayLoadPoints", () => {
+  const fb = (tMs: number, watts: Record<number, number>): FeedBucket => ({ tMs, watts, partial: false });
+  const groups: LoadGroup[] = [
+    { label: "Lights", ids: [1, 3] },
+    { label: "Oven", ids: [4] },
+    { label: "Solar", ids: [5] },
+  ];
+
+  it("sums each load group's feeds under its label", () => {
+    const pts = toTodayLoadPoints([fb(1000, { 1: 120, 3: 80, 4: 400 })], groups, [5]);
+    expect(pts).toEqual([{ t: 1000, Lights: 200, Oven: 400, Solar: 0 }]);
+  });
+
+  it("flips a solar group to positive generation", () => {
+    const pts = toTodayLoadPoints([fb(1000, { 1: 0, 3: 0, 4: 0, 5: -1200 })], groups, [5]);
+    expect(pts[0].Solar).toBe(1200);
   });
 });
 

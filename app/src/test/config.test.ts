@@ -13,6 +13,12 @@ describe("config", () => {
     expect(config.feeds.solar).toEqual([384753]);
     expect(config.feeds.main).not.toContain(545440);
   });
+  it("defines eight by-load series covering every feed exactly once", () => {
+    expect(config.loadGroups).toHaveLength(8);
+    const covered = config.loadGroups.flatMap((g) => g.ids).sort((a, b) => a - b);
+    expect(covered).toEqual([...config.allFeedIds].sort((a, b) => a - b));
+    for (const g of config.loadGroups) expect(g.label).toBeTruthy();
+  });
   it("carries the feed reconfiguration data-floor date", () => {
     expect(config.dataStartDate).toBe("2026-09-07");
   });

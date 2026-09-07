@@ -1,4 +1,6 @@
 export interface FeedGroups { main: number[]; nicki: number[]; solar: number[]; }
+/** A named series in the "by load" chart — one or more feed ids summed together. */
+export interface LoadGroup { label: string; ids: number[]; }
 export interface Tariff {
   importCentsPerKwh: number;
   supplyChargeCentsPerDay: number;
@@ -14,6 +16,12 @@ export interface GroupBucket {
   mainW: number;
   nickiW: number;
   solarW: number; // >= 0 when generating
+  partial: boolean;
+}
+
+export interface FeedBucket {
+  tMs: number;
+  watts: Record<number, number>; // per feed id, raw sign (solar negative when generating)
   partial: boolean;
 }
 
@@ -39,65 +47,79 @@ export function inferBucketSeconds(buckets: GroupBucket[], fallbackSeconds: numb
   return deltas[Math.floor(deltas.length / 2)];
 }
 
-export function buildBuckets(series: MultiFeedSeries, groups: FeedGroups): GroupBucket[] {
+/**
+ * Aligns the raw multi-feed series into per-timestamp buckets, one watt value
+ * per feed id, keeping each feed's raw sign (solar is negative when generating).
+ *
+ * `partial` marks a bucket where at least one requested feed has no usable
+ * value: a feed absent from the response entirely (dropped/errored upstream), or
+ * a null at/after that feed's first real datapoint (a drop-out). A *leading* run
+ * of nulls is a feed that had not started reporting yet — it contributes 0 and
+ * is not a gap.
+ */
+export function buildFeedBuckets(series: MultiFeedSeries, feedIds: number[]): FeedBucket[] {
   const byId = new Map(series.map((s) => [Number(s.feedid), s.data]));
-  const all = [...groups.main, ...groups.nicki, ...groups.solar];
-  const length = Math.max(0, ...all.map((id) => byId.get(id)?.length ?? 0));
+  const length = Math.max(0, ...feedIds.map((id) => byId.get(id)?.length ?? 0));
 
   // Per feed id: index of its first non-null datapoint (Infinity if it never
-  // reports). A null before this index means "not reporting yet" — contributes 0
-  // and is not a gap. A null at or after it is a real drop-out.
+  // reports), used to tell a leading null from a real drop-out.
   const firstIdx = new Map<number, number>();
   for (const s of series) {
     const i = s.data.findIndex(([, v]) => v != null);
     firstIdx.set(Number(s.feedid), i === -1 ? Infinity : i);
   }
 
-  const sumGroup = (ids: number[], i: number) => {
-    let sum = 0;
-    let missing = false;
-    for (const id of ids) {
+  const out: FeedBucket[] = [];
+  for (let i = 0; i < length; i++) {
+    const watts: Record<number, number> = {};
+    let partial = false;
+    for (const id of feedIds) {
       const feedData = byId.get(id);
       if (feedData === undefined) {
-        // The feed is absent from the response entirely (dropped/errored
-        // upstream) — that is a real gap in every bucket, not a quiet zero.
-        missing = true;
+        watts[id] = 0;
+        partial = true;
         continue;
       }
       const v = feedData[i]?.[1];
       if (v == null) {
-        if (i >= (firstIdx.get(id) ?? Infinity)) missing = true;
-        // else: leading null — the feed had not started reporting yet, so it
-        // contributes 0 and is not a gap.
-      } else sum += v;
+        watts[id] = 0;
+        if (i >= (firstIdx.get(id) ?? Infinity)) partial = true;
+      } else {
+        watts[id] = v;
+      }
     }
-    return { sum, missing };
-  };
-
-  const out: GroupBucket[] = [];
-  for (let i = 0; i < length; i++) {
-    const main = sumGroup(groups.main, i);
-    const nicki = sumGroup(groups.nicki, i);
-    const solar = sumGroup(groups.solar, i);
-    // Take the timestamp from the first feed that actually has a point at this
-    // index — the first configured feed may be missing from the response.
+    // Timestamp from the first feed that actually has a point at this index —
+    // the first configured feed may be missing from the response.
     let tMs = 0;
-    for (const id of all) {
+    for (const id of feedIds) {
       const t = byId.get(id)?.[i]?.[0];
       if (t != null) { tMs = t; break; }
     }
-    out.push({
-      tMs,
-      mainW: main.sum,
-      nickiW: nicki.sum,
-      // Feed is negative when generating. `|| 0` collapses the `-0` that a
-      // zero-generation sum would otherwise produce, so bucket equality in tests
-      // and downstream comparisons stay predictable.
-      solarW: -solar.sum || 0,
-      partial: main.missing || nicki.missing || solar.missing,
-    });
+    out.push({ tMs, watts, partial });
   }
   return out;
+}
+
+/**
+ * `buildFeedBuckets` collapsed into the three household groups — the shape the
+ * bill and the by-house chart consume. Any missing feed in any group makes the
+ * whole bucket `partial`.
+ */
+export function buildBuckets(series: MultiFeedSeries, groups: FeedGroups): GroupBucket[] {
+  const all = [...groups.main, ...groups.nicki, ...groups.solar];
+  const sum = (watts: Record<number, number>, ids: number[]) =>
+    ids.reduce((a, id) => a + (watts[id] ?? 0), 0);
+
+  return buildFeedBuckets(series, all).map((b) => ({
+    tMs: b.tMs,
+    mainW: sum(b.watts, groups.main),
+    nickiW: sum(b.watts, groups.nicki),
+    // Feed is negative when generating. `|| 0` collapses the `-0` that a
+    // zero-generation sum would otherwise produce, so bucket equality in tests
+    // and downstream comparisons stay predictable.
+    solarW: -sum(b.watts, groups.solar) || 0,
+    partial: b.partial,
+  }));
 }
 
 export interface HouseholdBill {
