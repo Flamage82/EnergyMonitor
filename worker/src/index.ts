@@ -1,12 +1,84 @@
+import { FEED_IDS } from "./feeds";
+
 export interface Env {
   EMONCMS_KEY: string;
   ALLOWED_ORIGIN: string;
 }
 
-export default {
-  async fetch(): Promise<Response> {
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { "Content-Type": "application/json" },
+const EMONCMS = "https://emoncms.org";
+
+export function cors(env: Env): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN,
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    Vary: "Origin",
+  };
+}
+
+export function jsonError(message: string, env: Env, status: number): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "Content-Type": "application/json", ...cors(env) },
+  });
+}
+
+export async function proxy(
+  clientUrl: string,
+  upstreamURL: URL,
+  env: Env,
+  ctx: ExecutionContext,
+  ttl: number,
+): Promise<Response> {
+  const cache = caches.default;
+  // Cache key is derived from the client-facing URL only — it must never
+  // contain the apikey we add below.
+  const cacheKey = new Request(clientUrl);
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
+
+  upstreamURL.searchParams.set("apikey", env.EMONCMS_KEY);
+
+  let upstreamRes: Response;
+  try {
+    upstreamRes = await fetch(upstreamURL.toString(), {
+      headers: { Accept: "application/json" },
     });
+  } catch {
+    return jsonError("upstream fetch failed", env, 502);
+  }
+  if (!upstreamRes.ok) return jsonError(`upstream ${upstreamRes.status}`, env, 502);
+
+  const body = await upstreamRes.text();
+  const res = new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": `public, s-maxage=${ttl}`,
+      ...cors(env),
+    },
+  });
+  ctx.waitUntil(cache.put(cacheKey, res.clone()));
+  return res;
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: { ...cors(env), "Access-Control-Allow-Headers": "Content-Type" },
+      });
+    }
+    if (request.method !== "GET") return jsonError("method not allowed", env, 405);
+
+    const url = new URL(request.url);
+
+    if (url.pathname === "/live") {
+      const upstream = new URL(`${EMONCMS}/feed/fetch.json`);
+      upstream.searchParams.set("ids", FEED_IDS.join(","));
+      return proxy(request.url, upstream, env, ctx, 10);
+    }
+
+    return jsonError("not found", env, 404);
   },
 } satisfies ExportedHandler<Env>;
