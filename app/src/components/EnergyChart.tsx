@@ -6,14 +6,24 @@ import { config } from "../config";
 import { useTodaySeries } from "../hooks/useSeries";
 import type { AsyncState } from "../hooks/usePolledFetch";
 import { inferBucketSeconds, type GroupBucket } from "../lib/energy";
-import { toTodayPoints, toMonthDayPoints } from "../lib/chart";
+import { toTodayPoints, toTodayLoadPoints, toMonthDayPoints } from "../lib/chart";
 import { Section } from "./Section";
 
-type Range = "today" | "month";
+type Range = "today" | "loads" | "month";
 const KEY = "energychart.range";
 const initialRange = (): Range => {
-  try { return localStorage.getItem(KEY) === "month" ? "month" : "today"; } catch { return "today"; }
+  try {
+    const v = localStorage.getItem(KEY);
+    return v === "month" || v === "loads" ? v : "today";
+  } catch { return "today"; }
 };
+
+// Eight-slot categorical palette (defined in App.css) for the by-load lines,
+// applied in the validated order — one fixed hue per load group, never cycled.
+const loadColors = [
+  "var(--chart-cat-1)", "var(--chart-cat-2)", "var(--chart-cat-3)", "var(--chart-cat-4)",
+  "var(--chart-cat-5)", "var(--chart-cat-6)", "var(--chart-cat-7)", "var(--chart-cat-8)",
+];
 
 // Raw feed watts carry ~10 decimal places — round to whole watts for the tooltip.
 const wattTip = (v: unknown) => `${Math.round(Number(v)).toLocaleString()} W`;
@@ -21,51 +31,83 @@ const hourTip = (t: unknown) =>
   new Date(Number(t)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const kwhTip = (v: unknown) => `${Number(v).toFixed(1)} kWh`;
 
+// Recharts' default axis/grid/legend strokes are a fixed dark grey — near
+// invisible on the dark theme. Feed them the theme-aware custom properties so
+// they track `prefers-color-scheme` like the series colours already do.
+const axis = "var(--chart-axis)";
+const grid = "var(--chart-grid)";
+const legendStyle = { color: "var(--chart-axis)" };
+
+// Shared chrome for the two intraday (watts-over-hours) charts.
+const hourGrid = <CartesianGrid strokeDasharray="3 3" stroke={grid} />;
+const hourX = (
+  <XAxis dataKey="t" stroke={axis} tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })} />
+);
+const kwY = <YAxis stroke={axis} tickFormatter={(n) => `${Math.round(n / 100) / 10} kW`} />;
+const wattTooltip = <Tooltip formatter={wattTip} labelFormatter={hourTip} />;
+
+function TodayChart({ buckets }: { buckets: GroupBucket[] }) {
+  return (
+    <ComposedChart data={toTodayPoints(buckets)}>
+      {hourGrid}{hourX}{kwY}{wattTooltip}
+      <Legend wrapperStyle={legendStyle} />
+      {/* Stacked household load: blue (main) under aqua (Nicki) — distinct hues,
+          each with a 2px outline so the boundary between the two fills stays
+          legible. */}
+      <Area type="monotone" dataKey="main" stackId="load" stroke="var(--chart-main)" strokeWidth={2} fill="var(--chart-main)" fillOpacity={0.7} name="Main house" />
+      <Area type="monotone" dataKey="nicki" stackId="load" stroke="var(--chart-nicki)" strokeWidth={2} fill="var(--chart-nicki)" fillOpacity={0.85} name="Nicki" />
+      <Line type="monotone" dataKey="solar" stroke="var(--chart-solar)" strokeWidth={2} dot={false} name="Solar" />
+    </ComposedChart>
+  );
+}
+
+function LoadsChart({ buckets }: { buckets: Parameters<typeof toTodayLoadPoints>[0] }) {
+  return (
+    <ComposedChart data={toTodayLoadPoints(buckets, config.loadGroups, config.feeds.solar)}>
+      {hourGrid}{hourX}{kwY}{wattTooltip}
+      <Legend wrapperStyle={legendStyle} />
+      {/* One line per load group, hue fixed by palette slot so a circuit keeps
+          its colour no matter what the others are doing. */}
+      {config.loadGroups.map((g, i) => (
+        <Line key={g.label} type="monotone" dataKey={g.label} stroke={loadColors[i]} strokeWidth={2} dot={false} name={g.label} />
+      ))}
+    </ComposedChart>
+  );
+}
+
+function MonthChart({ month }: { month: AsyncState<GroupBucket[]> }) {
+  const bucketSeconds = inferBucketSeconds(month.data ?? [], config.monthBucketSeconds);
+  return (
+    <ComposedChart data={toMonthDayPoints(month.data ?? [], bucketSeconds, config.timezone)}>
+      <CartesianGrid strokeDasharray="3 3" stroke={grid} />
+      <XAxis dataKey="day" stroke={axis} tickFormatter={(d: string) => d.slice(8)} />
+      <YAxis stroke={axis} tickFormatter={(n) => `${Math.round(n)} kWh`} />
+      <Tooltip formatter={kwhTip} />
+      <Bar dataKey="netImportKwh" fill="var(--chart-main)" name="Net import" />
+    </ComposedChart>
+  );
+}
+
 export function EnergyChart({ month }: { month: AsyncState<GroupBucket[]> }) {
   const [range, setRange] = useState<Range>(initialRange);
   const today = useTodaySeries();
   const choose = (r: Range) => { setRange(r); try { localStorage.setItem(KEY, r); } catch { /* ignore */ } };
 
-  const err = range === "today" ? today.error : month.error;
-
-  // Recharts' default axis/grid/legend strokes are a fixed dark grey — near
-  // invisible on the dark theme. Feed them the theme-aware custom properties so
-  // they track `prefers-color-scheme` like the series colours already do.
-  const axis = "var(--chart-axis)";
-  const grid = "var(--chart-grid)";
-  const legendStyle = { color: "var(--chart-axis)" };
-  const monthBucketSeconds = inferBucketSeconds(month.data ?? [], config.monthBucketSeconds);
+  const err = range === "month" ? month.error : today.error;
+  const chart =
+    range === "today" ? <TodayChart buckets={today.data?.buckets ?? []} />
+    : range === "loads" ? <LoadsChart buckets={today.data?.feedBuckets ?? []} />
+    : <MonthChart month={month} />;
 
   return (
     <Section title="Usage" error={err}>
       <div className="toggle" role="group" aria-label="Chart range">
         <button aria-pressed={range === "today"} onClick={() => choose("today")}>Today</button>
+        <button aria-pressed={range === "loads"} onClick={() => choose("loads")}>By load</button>
         <button aria-pressed={range === "month"} onClick={() => choose("month")}>This month</button>
       </div>
       <ResponsiveContainer width="100%" height={300}>
-        {range === "today" ? (
-          <ComposedChart data={toTodayPoints(today.data ?? [])}>
-            <CartesianGrid strokeDasharray="3 3" stroke={grid} />
-            <XAxis dataKey="t" stroke={axis} tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })} />
-            <YAxis stroke={axis} tickFormatter={(n) => `${Math.round(n / 100) / 10} kW`} />
-            <Tooltip formatter={wattTip} labelFormatter={hourTip} />
-            <Legend wrapperStyle={legendStyle} />
-            {/* Stacked household load: blue (main) under aqua (Nicki) — distinct
-                hues (the old blue/violet pair was not), each with a 2px outline
-                so the boundary between the two fills stays legible. */}
-            <Area type="monotone" dataKey="main" stackId="load" stroke="var(--chart-main)" strokeWidth={2} fill="var(--chart-main)" fillOpacity={0.7} name="Main house" />
-            <Area type="monotone" dataKey="nicki" stackId="load" stroke="var(--chart-nicki)" strokeWidth={2} fill="var(--chart-nicki)" fillOpacity={0.85} name="Nicki" />
-            <Line type="monotone" dataKey="solar" stroke="var(--chart-solar)" strokeWidth={2} dot={false} name="Solar" />
-          </ComposedChart>
-        ) : (
-          <ComposedChart data={toMonthDayPoints(month.data ?? [], monthBucketSeconds, config.timezone)}>
-            <CartesianGrid strokeDasharray="3 3" stroke={grid} />
-            <XAxis dataKey="day" stroke={axis} tickFormatter={(d: string) => d.slice(8)} />
-            <YAxis stroke={axis} tickFormatter={(n) => `${Math.round(n)} kWh`} />
-            <Tooltip formatter={kwhTip} />
-            <Bar dataKey="netImportKwh" fill="var(--chart-main)" name="Net import" />
-          </ComposedChart>
-        )}
+        {chart}
       </ResponsiveContainer>
     </Section>
   );

@@ -19,6 +19,20 @@
   /* Recharts axis lines / tick labels / legend text, and the cartesian grid. */
   --chart-axis: #6b7280;
   --chart-grid: #e2e5ea;
+
+  /* Eight-slot categorical palette for the "by load" view, in the validated
+     order (blue, orange, aqua, yellow, magenta, green, violet, red) — the order
+     is the colour-blind-safety mechanism, so keep it. Passes the light + dark
+     adjacent-pair gates; aqua/yellow/magenta sit below 3:1 on white, which the
+     always-present legend covers. */
+  --chart-cat-1: #2a78d6;
+  --chart-cat-2: #eb6834;
+  --chart-cat-3: #1baf7a;
+  --chart-cat-4: #eda100;
+  --chart-cat-5: #e87ba4;
+  --chart-cat-6: #008300;
+  --chart-cat-7: #4a3aa7;
+  --chart-cat-8: #e34948;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -41,6 +55,16 @@
     --chart-solar: #c98500;
     --chart-axis: #9aa0aa;
     --chart-grid: #2b2f37;
+
+    /* The same eight hues, stepped for the dark card surface (all clear 3:1). */
+    --chart-cat-1: #3987e5;
+    --chart-cat-2: #d95926;
+    --chart-cat-3: #199e70;
+    --chart-cat-4: #c98500;
+    --chart-cat-5: #d55181;
+    --chart-cat-6: #008300;
+    --chart-cat-7: #9085e9;
+    --chart-cat-8: #e66767;
   }
 }
 
