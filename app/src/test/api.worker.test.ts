@@ -4,8 +4,11 @@ import { fetchLive, fetchSeries } from "../api/worker";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("fetchLive", () => {
-  it("maps the positional array onto feed ids", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("[10,20,30]", { status: 200 })));
+  it("maps the feed-id-keyed object onto the requested feed ids", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ "1": 10, "2": 20, "3": 30 }), { status: 200 })),
+    );
     const v = await fetchLive("https://w", [1, 2, 3]);
     expect(v).toEqual({ 1: 10, 2: 20, 3: 30 });
   });

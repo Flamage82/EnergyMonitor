@@ -17,9 +17,9 @@ async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
 }
 
 export async function fetchLive(baseUrl: string, feedIds: number[], signal?: AbortSignal): Promise<LiveValues> {
-  const arr = (await getJson(`${baseUrl}/live`, signal)) as (number | null)[];
+  const obj = (await getJson(`${baseUrl}/live`, signal)) as Record<string, number | null>;
   const out: LiveValues = {};
-  feedIds.forEach((id, i) => { out[id] = Number(arr[i] ?? 0); });
+  for (const id of feedIds) out[id] = Number(obj[id] ?? 0);
   return out;
 }
 

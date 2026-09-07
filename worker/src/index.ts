@@ -28,6 +28,7 @@ export async function proxy(
   env: Env,
   ctx: ExecutionContext,
   ttl: number,
+  transform?: (upstreamText: string) => string,
 ): Promise<Response> {
   const cache = caches.default;
   // Cache key is derived from the client-facing URL only — it must never
@@ -48,7 +49,15 @@ export async function proxy(
   }
   if (!upstreamRes.ok) return jsonError(`upstream ${upstreamRes.status}`, env, 502);
 
-  const body = await upstreamRes.text();
+  let body = await upstreamRes.text();
+  if (transform) {
+    try {
+      body = transform(body);
+    } catch {
+      // Bad upstream body — don't cache or return garbage.
+      return jsonError("upstream returned an unparseable body", env, 502);
+    }
+  }
   const res = new Response(body, {
     status: 200,
     headers: {
@@ -76,7 +85,16 @@ export default {
     if (url.pathname === "/live") {
       const upstream = new URL(`${EMONCMS}/feed/fetch.json`);
       upstream.searchParams.set("ids", FEED_IDS.join(","));
-      return proxy(request.url, upstream, env, ctx, 10);
+      // Return an object keyed by feed id (zipping FEED_IDS with the upstream
+      // positional array) so the client mapping is order-independent forever.
+      return proxy(request.url, upstream, env, ctx, 10, (text) => {
+        const arr = JSON.parse(text) as (number | null)[];
+        const obj: Record<string, number | null> = {};
+        FEED_IDS.forEach((id, i) => {
+          obj[id] = arr[i] ?? null;
+        });
+        return JSON.stringify(obj);
+      });
     }
 
     if (url.pathname === "/series") {

@@ -26,12 +26,28 @@ describe("worker /live", () => {
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:5173");
   });
 
-  it("proxies /live to emoncms feed/fetch and adds CORS + cache headers", async () => {
+  it("proxies /live to emoncms feed/fetch, keys the array by FEED_IDS, and adds CORS + cache headers", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce(
+      new Response("[1,2,3,4,5,6,7,8,9,10]", { status: 200 }),
+    );
     const c = ctx();
     const res = await worker.fetch(new Request("https://w/live"), env, c);
     await waitOnExecutionContext(c);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual([1, 2, 3]);
+    // The id->value pairing must follow FEED_IDS order, position for position.
+    // This is the assertion that would have caught the client mis-alignment bug.
+    expect(await res.json()).toEqual({
+      "384745": 1,
+      "384746": 2,
+      "384747": 3,
+      "384748": 4,
+      "384750": 5,
+      "384751": 6,
+      "384752": 7,
+      "384753": 8,
+      "384754": 9,
+      "545440": 10,
+    });
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:5173");
     expect(res.headers.get("Cache-Control")).toContain("s-maxage=10");
     const calledUrl = (globalThis.fetch as any).mock.calls[0][0] as string;
@@ -45,6 +61,28 @@ describe("worker /live", () => {
     const cached = await caches.default.match(new Request("https://w/live"));
     expect(cached).toBeTruthy();
     expect(cached!.url).not.toContain("apikey");
+    // The cached entry is the transformed object, not the raw upstream array.
+    expect(await cached!.json()).toMatchObject({ "384745": 1, "545440": 10 });
+  });
+
+  it("maps missing upstream positions to null", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce(new Response("[1,2,3]", { status: 200 }));
+    const c = ctx();
+    const res = await worker.fetch(new Request("https://w/live"), env, c);
+    await waitOnExecutionContext(c);
+    const body = (await res.json()) as Record<string, number | null>;
+    expect(body["384745"]).toBe(1);
+    expect(body["545440"]).toBe(null);
+  });
+
+  it("returns 502 when the upstream body is not valid JSON", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce(new Response("<html>nope</html>", { status: 200 }));
+    const c = ctx();
+    const res = await worker.fetch(new Request("https://w/live"), env, c);
+    await waitOnExecutionContext(c);
+    expect(res.status).toBe(502);
+    const cached = await caches.default.match(new Request("https://w/live"));
+    expect(cached).toBeFalsy();
   });
 
   it("rejects POST with 405", async () => {
