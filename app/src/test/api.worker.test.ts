@@ -18,6 +18,23 @@ describe("fetchLive", () => {
     await expect(fetchLive("https://w", [1])).rejects.toThrow(/502/);
   });
 
+  it("throws when the proxy returns an array instead of an id-keyed object", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("[1,2,3]", { status: 200 })));
+    await expect(fetchLive("https://w", [1, 2, 3])).rejects.toThrow(/unexpected shape/);
+  });
+
+  it("throws when none of the requested feed ids are present", async () => {
+    // Silently returning all-zeros here would render a plausible-looking but
+    // wrong dashboard; it has to surface as an error banner instead.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+    await expect(fetchLive("https://w", [1, 2, 3])).rejects.toThrow(/no known feed values/);
+  });
+
+  it("throws when the proxy body is not JSON at all", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<b>Fatal error</b>", { status: 200 })));
+    await expect(fetchLive("https://w", [1])).rejects.toThrow(/bad response from proxy/);
+  });
+
   it("propagates AbortError without wrapping", async () => {
     const abortErr = Object.assign(new Error("aborted"), { name: "AbortError" });
     vi.stubGlobal("fetch", vi.fn(async () => { throw abortErr; }));
@@ -42,5 +59,19 @@ describe("fetchSeries", () => {
     expect(url).toContain("start=1788184800000"); // floored to minute
     expect(url).toContain("end=1788185040000");   // ceiled to minute
     expect(url).toContain("interval=300");
+  });
+
+  it("throws when the proxy body is not a JSON array", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response('{"success":false}', { status: 200 })));
+    await expect(
+      fetchSeries("https://w", { ids: [1], startMs: 0, endMs: 60_000, intervalSeconds: 300 }),
+    ).rejects.toThrow(/unexpected shape/);
+  });
+
+  it("throws when the proxy body is not JSON at all", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("not json", { status: 200 })));
+    await expect(
+      fetchSeries("https://w", { ids: [1], startMs: 0, endMs: 60_000, intervalSeconds: 300 }),
+    ).rejects.toThrow(/bad response from proxy/);
   });
 });
