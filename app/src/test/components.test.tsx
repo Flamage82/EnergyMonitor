@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import * as liveHook from "../hooks/useLiveFeeds";
 import * as seriesHook from "../hooks/useSeries";
@@ -58,14 +58,19 @@ describe("<EnergyChart>", () => {
 });
 
 describe("<BillSummary>", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-15T05:00:00Z"));
+  });
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it("renders a total for each household", () => {
     vi.spyOn(seriesHook, "useMonthData").mockReturnValue({
       data: [
-        { tMs: Date.parse("2026-08-31T14:00:00Z"), mainW: 1000, nickiW: 500, solarW: 200, partial: false },
+        { tMs: Date.parse("2026-09-08T14:00:00Z"), mainW: 1000, nickiW: 500, solarW: 200, partial: false },
       ],
       error: null, loading: false, lastUpdated: Date.now(),
     });
@@ -73,6 +78,17 @@ describe("<BillSummary>", () => {
     expect(screen.getByTestId("bill-main")).toHaveTextContent("$");
     expect(screen.getByTestId("bill-nicki")).toHaveTextContent("$");
     expect(screen.getByText(/estimate/i)).toBeInTheDocument();
+  });
+
+  it("notes the data-floor window when the floor is in effect", () => {
+    vi.spyOn(seriesHook, "useMonthData").mockReturnValue({
+      data: [
+        { tMs: Date.parse("2026-09-08T14:00:00Z"), mainW: 1000, nickiW: 500, solarW: 200, partial: false },
+      ],
+      error: null, loading: false, lastUpdated: Date.now(),
+    });
+    render(<BillSummary />);
+    expect(screen.getByText(/Covers 2026-09-07 onwards/)).toBeInTheDocument();
   });
 });
 

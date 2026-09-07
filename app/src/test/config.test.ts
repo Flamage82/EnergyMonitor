@@ -13,6 +13,9 @@ describe("config", () => {
     expect(config.feeds.solar).toEqual([384753]);
     expect(config.feeds.main).not.toContain(545440);
   });
+  it("carries the feed reconfiguration data-floor date", () => {
+    expect(config.dataStartDate).toBe("2026-09-07");
+  });
   it("carries the published tariff", () => {
     expect(config.tariff.importCentsPerKwh).toBe(27.83);
     expect(config.tariff.supplyChargeCentsPerDay).toBe(132.484);

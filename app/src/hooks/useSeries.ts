@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { config } from "../config";
 import { fetchSeries } from "../api/worker";
 import { buildBuckets, type GroupBucket } from "../lib/energy";
-import { monthStartMs, zonedTimeToUtcMs } from "../lib/time";
+import { monthStartMs, zonedTimeToUtcMs, localDateStartMs } from "../lib/time";
 import { usePolledFetch, type AsyncState } from "./usePolledFetch";
 
 const seriesIds = [...config.feeds.main, ...config.feeds.nicki, ...config.feeds.solar];
@@ -23,7 +23,11 @@ function useBucketRange(startMs: number, endMs: number, intervalMs: number): Asy
 }
 
 export function useMonthData(now: Date = new Date()): AsyncState<GroupBucket[]> {
-  const start = useMemo(() => monthStartMs(now, config.timezone), [now]);
+  const start = useMemo(() => {
+    const monthStart = monthStartMs(now, config.timezone);
+    const floor = localDateStartMs(config.dataStartDate, config.timezone);
+    return Math.max(monthStart, floor);
+  }, [now]);
   return useBucketRange(start, now.getTime(), config.billRecomputeMs);
 }
 

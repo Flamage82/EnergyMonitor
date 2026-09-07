@@ -56,7 +56,8 @@ describe("useMonthData", () => {
     const now = new Date("2026-09-07T05:00:00Z");
     const { result } = renderHook(() => useMonthData(now));
     await waitFor(() => expect(result.current.data).not.toBeNull());
-    expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-08-31T14:00:00Z"));
+    // month start (Sep 1) is before the data-floor (Sep 7), so the floor wins
+    expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-09-06T14:00:00Z"));
     const bucket = result.current.data![0];
     expect(bucket.nickiW).toBe(200);
     expect(bucket.solarW).toBe(500);

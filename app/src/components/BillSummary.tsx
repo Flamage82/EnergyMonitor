@@ -1,7 +1,7 @@
 import { config } from "../config";
 import { useMonthData } from "../hooks/useSeries";
 import { allocateBill, type HouseholdBill } from "../lib/energy";
-import { daysElapsedInMonth, monthLabel } from "../lib/time";
+import { localDateStartMs, monthLabel, monthStartMs } from "../lib/time";
 import { Section } from "./Section";
 
 const money = (n: number) => `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
@@ -24,12 +24,18 @@ function Card({ testId, name, bill }: { testId: string; name: string; bill: Hous
 export function BillSummary() {
   const now = new Date();
   const { data, error } = useMonthData(now);
+
+  const monthStart = monthStartMs(now, config.timezone);
+  const floor = localDateStartMs(config.dataStartDate, config.timezone);
+  const effStart = Math.max(monthStart, floor);
+  const daysElapsed = (now.getTime() - effStart) / 86_400_000;
+
   const bill = allocateBill(data ?? [], {
     bucketSeconds: config.bucketSeconds,
     tariff: config.tariff,
     shares: config.shares,
     solarAllocation: config.solarAllocation,
-    daysElapsed: daysElapsedInMonth(now, config.timezone),
+    daysElapsed,
   });
 
   return (
@@ -39,8 +45,10 @@ export function BillSummary() {
         <Card testId="bill-nicki" name="Nicki" bill={bill.nicki} />
       </div>
       <p className="note">
-        Estimate only — excludes unmonitored loads
-        {bill.gaps > 0 ? ` · ${bill.gaps} data gaps` : ""}. Rates: {config.tariff.importCentsPerKwh}c/kWh import,
+        Estimate only — excludes unmonitored loads.
+        {effStart > monthStart ? ` Covers ${config.dataStartDate} onwards (monitoring reconfigured).` : ""}
+        {bill.gaps > 0 ? ` ${bill.gaps} data ${bill.gaps === 1 ? "gap" : "gaps"}.` : ""}
+        {" "}Rates: {config.tariff.importCentsPerKwh}c/kWh import,
         {" "}{config.tariff.supplyChargeCentsPerDay}c/day supply, {config.tariff.feedInCentsPerKwh}c/kWh feed-in.
         Supply charge &amp; solar income split {config.shares.mainHouse}:{config.shares.nicki}.
       </p>

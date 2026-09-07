@@ -16,16 +16,48 @@ describe("buildBuckets", () => {
     expect(b[1]).toEqual({ tMs: 2000, mainW: 260, nickiW: 40, solarW: 10, partial: false });
   });
 
-  it("treats a null sample as 0 and marks the bucket partial", () => {
+  it("treats a null sample as 0 and marks the bucket partial once the feed has reported", () => {
+    // feed 1 reports at bucket 0 then drops out at bucket 1 -> real gap
     const series: MultiFeedSeries = [
-      { feedid: "1", data: [[1000, null]] },
-      { feedid: "2", data: [[1000, 50]] },
-      { feedid: "9", data: [[1000, 30]] },
-      { feedid: "5", data: [[1000, -400]] },
+      { feedid: "1", data: [[900, 10], [1000, null]] },
+      { feedid: "2", data: [[900, 40], [1000, 50]] },
+      { feedid: "9", data: [[900, 20], [1000, 30]] },
+      { feedid: "5", data: [[900, -400], [1000, -400]] },
     ];
-    expect(buildBuckets(series, groups)[0]).toEqual({
+    expect(buildBuckets(series, groups)[1]).toEqual({
       tMs: 1000, mainW: 50, nickiW: 30, solarW: 400, partial: true,
     });
+  });
+
+  it("treats a feed's leading run of nulls as not-started-yet (0, not a gap)", () => {
+    const series: MultiFeedSeries = [
+      { feedid: "1", data: [[0, 100], [1, 100], [2, 100], [3, 100], [4, 100], [5, 100]] },
+      { feedid: "2", data: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0]] },
+      // Nicki-style new feed: null until index 3
+      { feedid: "9", data: [[0, null], [1, null], [2, null], [3, 40], [4, 50], [5, 60]] },
+      { feedid: "5", data: [[0, -10], [1, -10], [2, -10], [3, -10], [4, -10], [5, -10]] },
+    ];
+    const b = buildBuckets(series, groups);
+    for (let i = 0; i < 3; i++) {
+      expect(b[i].partial).toBe(false);
+      expect(b[i].nickiW).toBe(0);
+    }
+    expect(b[3]).toEqual({ tMs: 3, mainW: 100, nickiW: 40, solarW: 10, partial: false });
+    expect(b[4].nickiW).toBe(50);
+    expect(b[5].nickiW).toBe(60);
+  });
+
+  it("flags a null that follows a feed's first real value as a real gap", () => {
+    const series: MultiFeedSeries = [
+      { feedid: "1", data: [[0, 100], [1, 100], [2, 100], [3, null], [4, 100]] },
+      { feedid: "2", data: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]] },
+      { feedid: "9", data: [[0, 10], [1, 10], [2, 10], [3, 10], [4, 10]] },
+      { feedid: "5", data: [[0, -10], [1, -10], [2, -10], [3, -10], [4, -10]] },
+    ];
+    const b = buildBuckets(series, groups);
+    expect(b[2].partial).toBe(false);
+    expect(b[3].partial).toBe(true);
+    expect(b[4].partial).toBe(false);
   });
 });
 

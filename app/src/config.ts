@@ -25,6 +25,11 @@ export const config = {
     (import.meta.env.VITE_WORKER_URL as string | undefined) ??
     "https://marburg-energy-proxy.CHANGE-ME.workers.dev",
   timezone: "Australia/Brisbane",
+  // Feeds were reconfigured on this date (Australia/Brisbane local). Data before
+  // it is ignored for the month-to-date bill and the "this month" chart. Once the
+  // billing month starts after this date it stops having any effect, so it can be
+  // deleted after 2026-09.
+  dataStartDate: "2026-09-07",
   feeds,
   feedLabels,
   allFeedIds: [...feeds.main, ...feeds.nicki, ...feeds.solar],

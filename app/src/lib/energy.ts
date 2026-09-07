@@ -26,14 +26,24 @@ export function buildBuckets(series: MultiFeedSeries, groups: FeedGroups): Group
   const all = [...groups.main, ...groups.nicki, ...groups.solar];
   const length = Math.max(0, ...all.map((id) => byId.get(id)?.length ?? 0));
 
+  // Per feed id: index of its first non-null datapoint (Infinity if it never
+  // reports). A null before this index means "not reporting yet" — contributes 0
+  // and is not a gap. A null at or after it is a real drop-out.
+  const firstIdx = new Map<number, number>();
+  for (const s of series) {
+    const i = s.data.findIndex(([, v]) => v != null);
+    firstIdx.set(Number(s.feedid), i === -1 ? Infinity : i);
+  }
+
   const sumGroup = (ids: number[], i: number) => {
     let sum = 0;
     let missing = false;
     for (const id of ids) {
       const point = byId.get(id)?.[i];
       const v = point?.[1];
-      if (v == null) missing = true;
-      else sum += v;
+      if (v == null) {
+        if (i >= (firstIdx.get(id) ?? Infinity)) missing = true;
+      } else sum += v;
     }
     return { sum, missing };
   };
