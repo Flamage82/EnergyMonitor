@@ -35,8 +35,8 @@ jobs:
         env:
           # REQUIRED GitHub Actions repository variable (Settings -> Secrets and
           # variables -> Actions -> Variables): the deployed Worker URL. An unset
-          # value renders as "" here, so the build/deploy still goes green but the
-          # site's live data and bill never load. See README > Deploy.
+          # value renders as "" here, which now fails the build (see
+          # app/vite.config.ts) rather than publishing a dead site. See README > Deploy.
           VITE_WORKER_URL: ${{ vars.WORKER_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
