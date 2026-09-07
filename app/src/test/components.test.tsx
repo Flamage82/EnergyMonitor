@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import * as liveHook from "../hooks/useLiveFeeds";
+import * as todayHook from "../hooks/useSeries";
 import { LiveNow } from "../components/LiveNow";
+import { EnergyChart } from "../components/EnergyChart";
 
 function mockLive(values: Record<number, number>) {
   vi.spyOn(liveHook, "useLiveFeeds").mockReturnValue({
@@ -32,5 +34,23 @@ describe("<LiveNow>", () => {
     });
     render(<LiveNow />);
     expect(screen.getByTestId("net")).toHaveAttribute("data-state", "exporting");
+  });
+});
+
+describe("<EnergyChart>", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("remembers the selected range in localStorage", () => {
+    vi.spyOn(todayHook, "useTodaySeries").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    vi.spyOn(todayHook, "useMonthData").mockReturnValue({ data: [], error: null, loading: false, lastUpdated: 1 });
+    const { unmount } = render(<EnergyChart />);
+    fireEvent.click(screen.getByRole("button", { name: /month/i }));
+    expect(localStorage.getItem("energychart.range")).toBe("month");
+    unmount();
+    render(<EnergyChart />);
+    expect(screen.getByRole("button", { name: /month/i })).toHaveAttribute("aria-pressed", "true");
   });
 });
