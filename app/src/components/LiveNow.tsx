@@ -3,7 +3,7 @@ import { useLiveFeeds } from "../hooks/useLiveFeeds";
 import { Section } from "./Section";
 
 const sum = (v: Record<number, number>, ids: number[]) => ids.reduce((a, id) => a + (v[id] ?? 0), 0);
-const w = (n: number) => `${Math.round(n).toLocaleString()} W`;
+const w = (n: number) => `${Math.round(n).toLocaleString("en-AU")} W`;
 
 export function LiveNow() {
   const { data, error, lastUpdated } = useLiveFeeds();
@@ -29,7 +29,7 @@ export function LiveNow() {
         {config.allFeedIds.map((id) => (
           <li key={id}>
             <span>{config.feedLabels[id]}</span>
-            <span>{w(id === config.feeds.solar[0] ? -(v[id] ?? 0) : (v[id] ?? 0))}</span>
+            <span>{w(config.feeds.solar.includes(id) ? -(v[id] ?? 0) : (v[id] ?? 0))}</span>
           </li>
         ))}
       </ul>

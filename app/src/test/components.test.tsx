@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import * as liveHook from "../hooks/useLiveFeeds";
 import { LiveNow } from "../components/LiveNow";
@@ -10,6 +10,10 @@ function mockLive(values: Record<number, number>) {
 }
 
 describe("<LiveNow>", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("shows per-circuit watts and the net import state", () => {
     mockLive({
       384745: 30, 384746: 500, 384747: 260, 384748: 140, 384750: 0,
