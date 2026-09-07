@@ -87,7 +87,9 @@ export default {
       upstream.searchParams.set("ids", FEED_IDS.join(","));
       // Return an object keyed by feed id (zipping FEED_IDS with the upstream
       // positional array) so the client mapping is order-independent forever.
-      return proxy(request.url, upstream, env, ctx, 10, (text) => {
+      // /live ignores every query param, so the cache key is a constant — a
+      // decorated URL must not miss the cache and re-hit upstream.
+      return proxy("https://cache/live", upstream, env, ctx, 10, (text) => {
         const arr = JSON.parse(text) as (number | null)[];
         if (!Array.isArray(arr)) throw new Error("upstream /live body is not an array");
         const obj: Record<string, number | null> = {};
@@ -104,8 +106,15 @@ export default {
       const end = url.searchParams.get("end");
       if (idsRaw.length === 0 || !start || !end) return jsonError("ids, start, end required", env, 400);
 
+      // Normalize before validating or forwarding: dedupe, drop non-integers and
+      // sort, so `384753,384753` and `384753.0` collapse onto one cache entry.
+      const ids = [...new Set(idsRaw.map((s) => Number(s)))]
+        .filter((n) => Number.isInteger(n))
+        .sort((a, b) => a - b);
+      if (ids.length === 0) return jsonError("ids required", env, 400);
+
       const allowed = new Set<number>(FEED_IDS as readonly number[]);
-      if (!idsRaw.every((id) => allowed.has(Number(id)))) return jsonError("unknown feed id", env, 403);
+      if (!ids.every((id) => allowed.has(id))) return jsonError("unknown feed id", env, 403);
 
       const startMs = Number(start);
       const endMs = Number(end);
@@ -116,15 +125,34 @@ export default {
 
       let interval = Number(url.searchParams.get("interval") ?? "300");
       if (!Number.isFinite(interval) || interval < 60) interval = 60;
+      // emoncms answers an over-large feed/data.json query with HTTP 200 and a
+      // PHP "Allowed memory size exhausted" HTML body — a memory limit roughly
+      // proportional to the total datapoint count. Cap the request near 100k
+      // points by coarsening the interval; the app's own 900 s month request is
+      // already well under this.
+      const spanSeconds = span / 1000;
+      const minInterval = Math.ceil((spanSeconds * ids.length) / 100_000);
+      interval = Math.max(interval, 60, minInterval);
 
       const upstream = new URL(`${EMONCMS}/feed/data.json`);
-      upstream.searchParams.set("ids", idsRaw.join(","));
+      upstream.searchParams.set("ids", ids.join(","));
       upstream.searchParams.set("start", String(startMs));
       upstream.searchParams.set("end", String(endMs));
       upstream.searchParams.set("interval", String(interval));
       upstream.searchParams.set("average", "1");
       upstream.searchParams.set("timeformat", "unixms");
-      return proxy(request.url, upstream, env, ctx, 60);
+
+      // Cache key built from the normalized + clamped values, never the raw
+      // client URL (and never the apikey, which proxy() adds upstream-side).
+      const cacheKey =
+        `https://cache/series?ids=${ids.join(",")}&start=${startMs}&end=${endMs}&interval=${interval}`;
+
+      return proxy(cacheKey, upstream, env, ctx, 60, (text) => {
+        // An HTML fatal-error body throws here -> 502, nothing cached.
+        const parsed = JSON.parse(text);
+        if (!Array.isArray(parsed)) throw new Error("upstream /series body is not an array");
+        return text;
+      });
     }
 
     return jsonError("not found", env, 404);
