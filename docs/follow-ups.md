@@ -17,6 +17,10 @@ Items deferred from the final whole-branch review of `feat/energy-dashboard`
 - **Dark-mode chart axes/grid.** Added `--chart-axis` / `--chart-grid` custom
   properties (both themes) and wired explicit `stroke` onto `<XAxis>` / `<YAxis>` /
   `<CartesianGrid>` plus a `<Legend>` `wrapperStyle` colour.
+- **Dark-mode chart tooltip.** The `<Tooltip>` panels were still Recharts' hard-
+  coded white; themed via a shared `tooltipProps` (`--card` / `--border` /
+  `--text` / `--muted`, `--shadow`), `zIndex` to sit above the legend wrapper, and
+  ink-coloured rows so the readout stays legible over both card surfaces.
 - **Key in an `Authorization` header, not a query param.** The Worker now sends
   `Authorization: Bearer …` on the upstream request; no `apikey` in any URL.
 - `buildBuckets` no longer emits `solarW: -0` (`-solar.sum || 0`).

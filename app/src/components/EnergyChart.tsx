@@ -38,13 +38,30 @@ const axis = "var(--chart-axis)";
 const grid = "var(--chart-grid)";
 const legendStyle = { color: "var(--chart-axis)" };
 
+// The tooltip needs the same dark-theme treatment the axes got — Recharts hard-
+// codes a white panel. `zIndex` lifts it above the legend wrapper, which Recharts
+// renders after it in the DOM (so an overlap would otherwise paint legend text
+// over the panel); `itemStyle` colour keeps the readout text in readable ink
+// while the coloured bullet still carries series identity.
+const tooltipProps = {
+  wrapperStyle: { zIndex: 10 },
+  contentStyle: {
+    background: "var(--card)",
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    boxShadow: "var(--shadow)",
+  },
+  labelStyle: { color: "var(--muted)" },
+  itemStyle: { color: "var(--text)", padding: "1px 0" },
+} as const;
+
 // Shared chrome for the two intraday (watts-over-hours) charts.
 const hourGrid = <CartesianGrid strokeDasharray="3 3" stroke={grid} />;
 const hourX = (
   <XAxis dataKey="t" stroke={axis} tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })} />
 );
 const kwY = <YAxis stroke={axis} tickFormatter={(n) => `${Math.round(n / 100) / 10} kW`} />;
-const wattTooltip = <Tooltip formatter={wattTip} labelFormatter={hourTip} />;
+const wattTooltip = <Tooltip {...tooltipProps} formatter={wattTip} labelFormatter={hourTip} />;
 
 function TodayChart({ buckets }: { buckets: GroupBucket[] }) {
   return (
@@ -82,7 +99,7 @@ function MonthChart({ month }: { month: AsyncState<GroupBucket[]> }) {
       <CartesianGrid strokeDasharray="3 3" stroke={grid} />
       <XAxis dataKey="day" stroke={axis} tickFormatter={(d: string) => d.slice(8)} />
       <YAxis stroke={axis} tickFormatter={(n) => `${Math.round(n)} kWh`} />
-      <Tooltip formatter={kwhTip} />
+      <Tooltip {...tooltipProps} formatter={kwhTip} />
       <Bar dataKey="netImportKwh" fill="var(--chart-main)" name="Net import" />
     </ComposedChart>
   );
@@ -106,7 +123,10 @@ export function EnergyChart({ month }: { month: AsyncState<GroupBucket[]> }) {
         <button aria-pressed={range === "loads"} onClick={() => choose("loads")}>By load</button>
         <button aria-pressed={range === "month"} onClick={() => choose("month")}>This month</button>
       </div>
-      <ResponsiveContainer width="100%" height={300}>
+      {/* The by-load view carries eight series: a taller panel keeps the plot
+          readable and gives the eight-row tooltip room to sit clear of the
+          legend below it. */}
+      <ResponsiveContainer width="100%" height={range === "loads" ? 380 : 300}>
         {chart}
       </ResponsiveContainer>
     </Section>
