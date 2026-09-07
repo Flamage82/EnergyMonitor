@@ -23,7 +23,9 @@ const shares: Shares = { mainHouse: 4, nicki: 1 };
 export const config = {
   workerBaseUrl:
     (import.meta.env.VITE_WORKER_URL as string | undefined) ??
-    "https://marburg-energy-proxy.CHANGE-ME.workers.dev",
+    // Set the GitHub Actions repo variable WORKER_URL (see README > Deploy) to the
+    // deployed Worker URL. This literal is only the last-resort fallback.
+    "https://marburg-energy-proxy.example.workers.dev",
   timezone: "Australia/Brisbane",
   // Feeds were reconfigured on this date (Australia/Brisbane local). Data before
   // it is ignored for the month-to-date bill and the "this month" chart. Once the
