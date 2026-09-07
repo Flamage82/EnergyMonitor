@@ -84,6 +84,15 @@ describe("useMonthData", () => {
     expect(bucket.nickiW).toBe(200);
     expect(bucket.solarW).toBe(500);
   });
+
+  it("fetches the whole previous month at a negative offset", async () => {
+    const spy = vi.spyOn(api, "fetchSeries").mockResolvedValue([] as any);
+    const now = new Date("2026-11-15T05:00:00Z");
+    renderHook(() => useMonthData(now, -1));
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-09-30T14:00:00Z")); // Oct 1 Brisbane
+    expect(spy.mock.calls[0][1].endMs).toBe(Date.parse("2026-10-31T14:00:00Z")); // Nov 1 Brisbane
+  });
 });
 
 describe("useTodaySeries", () => {
@@ -105,5 +114,14 @@ describe("useTodaySeries", () => {
     expect(result.current.data!.buckets[0].mainW).toBe(1000);
     expect(result.current.data!.feedBuckets[0].watts[384746]).toBe(1000);
     expect(result.current.data!.feedBuckets[0].watts[384753]).toBe(-500);
+  });
+
+  it("fetches a whole past day at a negative offset", async () => {
+    const spy = vi.spyOn(api, "fetchSeries").mockResolvedValue([] as any);
+    const now = new Date("2026-09-08T05:00:00Z");
+    renderHook(() => useTodaySeries(now, -1));
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-09-06T14:00:00Z")); // Sep 7 00:00 Brisbane
+    expect(spy.mock.calls[0][1].endMs).toBe(Date.parse("2026-09-07T14:00:00Z")); // Sep 8 00:00 Brisbane
   });
 });

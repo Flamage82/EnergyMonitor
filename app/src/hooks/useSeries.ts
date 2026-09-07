@@ -2,10 +2,14 @@ import { useMemo } from "react";
 import { config } from "../config";
 import { fetchSeries } from "../api/worker";
 import { buildBuckets, buildFeedBuckets, type FeedBucket, type GroupBucket } from "../lib/energy";
-import { effectiveMonthWindow, zonedTimeToUtcMs } from "../lib/time";
+import { dayWindow, monthWindow } from "../lib/time";
 import { usePolledFetch, type AsyncState } from "./usePolledFetch";
 
 const seriesIds = [...config.feeds.main, ...config.feeds.nicki, ...config.feeds.solar];
+
+// A day or month in the past is settled data — poll it daily rather than at the
+// live-view cadence so paging back doesn't spin up a fast refetch loop.
+const STATIC_POLL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Today's data in both shapes the chart needs: `buckets` grouped into
@@ -38,22 +42,30 @@ function useBucketRange(
   );
 }
 
-export function useMonthData(now: Date = new Date()): AsyncState<GroupBucket[]> {
-  const start = useMemo(
-    () => effectiveMonthWindow(now, config.timezone, config.dataStartDate).startMs,
-    [now],
+/**
+ * Whole-month buckets for the calendar month `monthOffset` months back from
+ * `now` (0 = current month-to-date). Past months poll daily rather than at the
+ * bill-recompute cadence.
+ */
+export function useMonthData(now: Date = new Date(), monthOffset = 0): AsyncState<GroupBucket[]> {
+  const { startMs, endMs } = useMemo(
+    () => monthWindow(now, config.timezone, config.dataStartDate, monthOffset),
+    [now, monthOffset],
   );
-  return useBucketRange(start, now.getTime(), config.billRecomputeMs, config.monthBucketSeconds);
+  const interval = monthOffset === 0 ? config.billRecomputeMs : STATIC_POLL_MS;
+  return useBucketRange(startMs, endMs, interval, config.monthBucketSeconds);
 }
 
-export function useTodaySeries(now: Date = new Date()): AsyncState<TodaySeries> {
-  const start = useMemo(() => {
-    const key = new Intl.DateTimeFormat("en-CA", {
-      timeZone: config.timezone, year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(now).split("-").map(Number);
-    return zonedTimeToUtcMs(key[0], key[1], key[2], 0, 0, 0, config.timezone);
-  }, [now]);
-  const end = now.getTime();
+/**
+ * Intraday series for the calendar day `dayOffset` days back from `now`
+ * (0 = today, up to `now`; a past day spans its full local midnight-to-midnight).
+ */
+export function useTodaySeries(now: Date = new Date(), dayOffset = 0): AsyncState<TodaySeries> {
+  const { startMs: start, endMs: end } = useMemo(
+    () => dayWindow(now, config.timezone, config.dataStartDate, dayOffset),
+    [now, dayOffset],
+  );
+  const interval = dayOffset === 0 ? config.todayRefreshMs : STATIC_POLL_MS;
   return usePolledFetch<TodaySeries>(
     async (signal) => {
       const series = await fetchSeries(
@@ -66,7 +78,7 @@ export function useTodaySeries(now: Date = new Date()): AsyncState<TodaySeries> 
         feedBuckets: buildFeedBuckets(series, seriesIds),
       };
     },
-    config.todayRefreshMs,
+    interval,
     [start],
   );
 }

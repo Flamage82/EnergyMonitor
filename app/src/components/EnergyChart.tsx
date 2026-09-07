@@ -3,10 +3,11 @@ import {
   ResponsiveContainer, ComposedChart, Area, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 import { config } from "../config";
-import { useTodaySeries } from "../hooks/useSeries";
+import { useTodaySeries, useMonthData } from "../hooks/useSeries";
 import type { AsyncState } from "../hooks/usePolledFetch";
 import { inferBucketSeconds, type GroupBucket } from "../lib/energy";
 import { toTodayPoints, toTodayLoadPoints, toMonthDayPoints } from "../lib/chart";
+import { dayWindow, monthWindow, dayLabel, monthLabel } from "../lib/time";
 import { Section } from "./Section";
 
 type Range = "today" | "loads" | "month";
@@ -105,23 +106,51 @@ function MonthChart({ month }: { month: AsyncState<GroupBucket[]> }) {
   );
 }
 
-export function EnergyChart({ month }: { month: AsyncState<GroupBucket[]> }) {
+export function EnergyChart({ now }: { now: Date }) {
   const [range, setRange] = useState<Range>(initialRange);
-  const today = useTodaySeries();
+  // `dayOffset` drives the two intraday views, `monthOffset` the month view — a
+  // separate step each because they page in different units. Neither persists;
+  // a reload lands back on the live edge.
+  const [dayOffset, setDayOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
+
+  const today = useTodaySeries(now, dayOffset);
+  const month = useMonthData(now, monthOffset);
   const choose = (r: Range) => { setRange(r); try { localStorage.setItem(KEY, r); } catch { /* ignore */ } };
 
-  const err = range === "month" ? month.error : today.error;
+  const isMonth = range === "month";
+  const dayW = dayWindow(now, config.timezone, config.dataStartDate, dayOffset);
+  const monthW = monthWindow(now, config.timezone, config.dataStartDate, monthOffset);
+
+  const step = (delta: -1 | 1) => {
+    if (isMonth) setMonthOffset((o) => Math.min(0, o + delta));
+    else setDayOffset((o) => Math.min(0, o + delta));
+  };
+  const atFloor = isMonth ? monthW.atFloor : dayW.atFloor;
+  const atLiveEdge = isMonth ? monthOffset >= 0 : dayOffset >= 0;
+
+  const label = isMonth
+    ? monthLabel(new Date(monthW.monthStart), config.timezone)
+    : dayOffset === 0 ? "Today" : dayLabel(dayW.startMs, config.timezone);
+
+  const err = isMonth ? month.error : today.error;
   const chart =
     range === "today" ? <TodayChart buckets={today.data?.buckets ?? []} />
     : range === "loads" ? <LoadsChart buckets={today.data?.feedBuckets ?? []} />
     : <MonthChart month={month} />;
 
   return (
-    <Section title="Usage" error={err}>
-      <div className="toggle" role="group" aria-label="Chart range">
-        <button aria-pressed={range === "today"} onClick={() => choose("today")}>Today</button>
-        <button aria-pressed={range === "loads"} onClick={() => choose("loads")}>By load</button>
-        <button aria-pressed={range === "month"} onClick={() => choose("month")}>This month</button>
+    <Section title={`Usage — ${label}`} error={err}>
+      <div className="chart-controls">
+        <div className="toggle" role="group" aria-label="Chart range">
+          <button aria-pressed={range === "today"} onClick={() => choose("today")}>Today</button>
+          <button aria-pressed={range === "loads"} onClick={() => choose("loads")}>By load</button>
+          <button aria-pressed={range === "month"} onClick={() => choose("month")}>This month</button>
+        </div>
+        <div className="stepper" role="group" aria-label={isMonth ? "Chart month" : "Chart day"}>
+          <button aria-label="Previous" disabled={atFloor} onClick={() => step(-1)}>‹</button>
+          <button aria-label="Next" disabled={atLiveEdge} onClick={() => step(1)}>›</button>
+        </div>
       </div>
       {/* The by-load view carries eight series: a taller panel keeps the plot
           readable and gives the eight-row tooltip room to sit clear of the

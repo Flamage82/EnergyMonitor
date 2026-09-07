@@ -51,6 +51,14 @@ describe("<LiveNow>", () => {
 });
 
 describe("<EnergyChart>", () => {
+  // 2026-09-08 15:00 Brisbane; the configured data floor is 2026-09-07.
+  const now = new Date("2026-09-08T05:00:00Z");
+
+  const mockData = () => {
+    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
+    vi.spyOn(seriesHook, "useMonthData").mockReturnValue(monthState([]));
+  };
+
   // Clear before as well as after so this block's isolation doesn't depend on
   // test order (a stray `energychart.range` from elsewhere would flip a default).
   beforeEach(() => localStorage.clear());
@@ -60,36 +68,72 @@ describe("<EnergyChart>", () => {
   });
 
   it("remembers the selected range in localStorage", () => {
-    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
-    const { unmount } = render(<EnergyChart month={monthState([])} />);
-    fireEvent.click(screen.getByRole("button", { name: /month/i }));
+    mockData();
+    const { unmount } = render(<EnergyChart now={now} />);
+    fireEvent.click(screen.getByRole("button", { name: /this month/i }));
     expect(localStorage.getItem("energychart.range")).toBe("month");
     unmount();
-    render(<EnergyChart month={monthState([])} />);
-    expect(screen.getByRole("button", { name: /month/i })).toHaveAttribute("aria-pressed", "true");
+    render(<EnergyChart now={now} />);
+    expect(screen.getByRole("button", { name: /this month/i })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("does not mount its own month poll (App owns it)", () => {
-    const monthSpy = vi.spyOn(seriesHook, "useMonthData");
+  it("mounts its own month poll so it can page independently of the bill", () => {
+    const monthSpy = vi.spyOn(seriesHook, "useMonthData").mockReturnValue(monthState([]));
     vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
-    render(<EnergyChart month={monthState([])} />);
-    expect(monthSpy).not.toHaveBeenCalled();
+    render(<EnergyChart now={now} />);
+    expect(monthSpy).toHaveBeenCalled();
   });
 
   it("gives the range toggle an accessible name", () => {
-    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
-    render(<EnergyChart month={monthState([])} />);
+    mockData();
+    render(<EnergyChart now={now} />);
     expect(screen.getByRole("group", { name: "Chart range" })).toBeInTheDocument();
   });
 
   it("remembers the by-load view and restores it as the pressed button", () => {
-    vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
-    const { unmount } = render(<EnergyChart month={monthState([])} />);
+    mockData();
+    const { unmount } = render(<EnergyChart now={now} />);
     fireEvent.click(screen.getByRole("button", { name: /by load/i }));
     expect(localStorage.getItem("energychart.range")).toBe("loads");
     unmount();
-    render(<EnergyChart month={monthState([])} />);
+    render(<EnergyChart now={now} />);
     expect(screen.getByRole("button", { name: /by load/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("heads the section with the current day and disables step-forward at the live edge", () => {
+    mockData();
+    render(<EnergyChart now={now} />);
+    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent("Today");
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
+  });
+
+  it("pages back a day, then stops at the data-start floor", () => {
+    mockData();
+    render(<EnergyChart now={now} />);
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent(/Mon.*7.*Sep/);
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+    // Sep 7 is the configured floor — no earlier day to page to.
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+  });
+
+  it("keeps the day offset when toggling between Today and By load", () => {
+    mockData();
+    render(<EnergyChart now={now} />);
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    fireEvent.click(screen.getByRole("button", { name: /by load/i }));
+    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent(/Mon.*7.*Sep/);
+  });
+
+  it("pages the month view by whole months and labels it", () => {
+    mockData();
+    localStorage.setItem("energychart.range", "month");
+    render(<EnergyChart now={now} />);
+    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent("September 2026");
+    // No prior month has data, and September is the live month.
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
   });
 });
 
@@ -150,7 +194,7 @@ describe("<App>", () => {
     render(<App />);
     expect(screen.getByRole("heading", { level: 1, name: "Marburg Energy" })).toBeInTheDocument();
     expect(screen.getByText("Right now")).toBeInTheDocument();
-    expect(screen.getByText("Usage")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Usage/ })).toBeInTheDocument();
     expect(screen.getByText(/Bill so far/)).toBeInTheDocument();
   });
 });

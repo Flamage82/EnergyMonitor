@@ -33,9 +33,10 @@ export default function App() {
 }
 
 function Dashboard() {
-  // One month poll for the whole app: the chart and the bill share it rather
-  // than each mounting their own useMonthData. `now` is fixed at mount so both
-  // read the same window.
+  // `now` is fixed at mount so every panel reads the same "current" instant.
+  // The bill's month poll lives here; the chart owns a second one because it can
+  // page to other months independently (an extra current-month request when
+  // neither has paged away — fine at this app's cadence and traffic).
   const [now] = useState(() => new Date());
   const month = useMonthData(now);
 
@@ -45,7 +46,7 @@ function Dashboard() {
         <h1>Marburg Energy</h1>
       </header>
       <LiveNow />
-      <EnergyChart month={month} />
+      <EnergyChart now={now} />
       <BillSummary now={now} month={month} />
     </main>
   );

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   monthStartMs, effectiveMonthWindow, localDayKey, monthLabel, localDateStartMs, zonedTimeToUtcMs,
+  dayWindow, monthWindow, dayLabel,
 } from "../lib/time";
 
 const TZ = "Australia/Brisbane"; // UTC+10, no DST
@@ -56,5 +57,65 @@ describe("time helpers", () => {
 
   it("monthLabel formats month and year", () => {
     expect(monthLabel(new Date("2026-09-07T05:00:00Z"), TZ)).toBe("September 2026");
+  });
+
+  it("dayLabel formats weekday, day and month in the zone", () => {
+    // 2026-09-06T14:00:00Z === 2026-09-07 00:00 Brisbane, a Monday
+    expect(dayLabel(Date.parse("2026-09-06T14:00:00Z"), TZ)).toMatch(/Mon.*7.*Sep/);
+  });
+});
+
+describe("dayWindow", () => {
+  // 2026-09-08 15:00 Brisbane
+  const now = new Date("2026-09-08T05:00:00Z");
+
+  it("spans local midnight today to now at offset 0", () => {
+    const w = dayWindow(now, TZ, "2026-09-07", 0);
+    expect(w.startMs).toBe(Date.parse("2026-09-07T14:00:00Z")); // Sep 8 00:00 Brisbane
+    expect(w.endMs).toBe(now.getTime());
+    expect(w.atFloor).toBe(false);
+  });
+
+  it("spans a whole past calendar day at a negative offset", () => {
+    const w = dayWindow(now, TZ, "2026-09-07", -1);
+    expect(w.startMs).toBe(Date.parse("2026-09-06T14:00:00Z")); // Sep 7 00:00 Brisbane
+    expect(w.endMs).toBe(Date.parse("2026-09-07T14:00:00Z")); // Sep 8 00:00 Brisbane
+  });
+
+  it("crosses the month boundary when the offset runs past the 1st", () => {
+    const w = dayWindow(now, TZ, "2026-01-01", -10); // Aug 29
+    expect(w.startMs).toBe(Date.parse("2026-08-28T14:00:00Z"));
+  });
+
+  it("flags atFloor once the day is at or before dataStartDate", () => {
+    expect(dayWindow(now, TZ, "2026-09-07", -1).atFloor).toBe(true);
+    expect(dayWindow(now, TZ, "2026-09-07", -2).atFloor).toBe(true);
+  });
+});
+
+describe("monthWindow", () => {
+  it("at offset 0 matches the current effective-month window", () => {
+    const now = new Date("2026-09-20T05:00:00Z");
+    const w = monthWindow(now, TZ, "2026-09-07", 0);
+    expect(w.startMs).toBe(Date.parse("2026-09-06T14:00:00Z")); // floored to Sep 7
+    expect(w.endMs).toBe(now.getTime());
+    expect(w.isCurrent).toBe(true);
+    expect(w.floored).toBe(true);
+    expect(w.atFloor).toBe(true); // no earlier month has data
+  });
+
+  it("at a negative offset spans the whole previous month", () => {
+    const now = new Date("2026-11-15T05:00:00Z");
+    const w = monthWindow(now, TZ, "2026-01-01", -1); // October
+    expect(w.startMs).toBe(Date.parse("2026-09-30T14:00:00Z")); // Oct 1 00:00 Brisbane
+    expect(w.endMs).toBe(Date.parse("2026-10-31T14:00:00Z")); // Nov 1 00:00 Brisbane
+    expect(w.isCurrent).toBe(false);
+    expect(w.daysElapsed).toBeCloseTo(31, 6);
+    expect(w.atFloor).toBe(false);
+  });
+
+  it("flags atFloor for the month containing dataStartDate", () => {
+    const now = new Date("2026-11-15T05:00:00Z");
+    expect(monthWindow(now, TZ, "2026-01-01", -10).atFloor).toBe(true); // January
   });
 });
