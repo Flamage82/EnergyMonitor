@@ -85,6 +85,21 @@ describe("worker /live", () => {
     expect(cached).toBeFalsy();
   });
 
+  it("returns 502 when the upstream body is valid JSON but not an array", async () => {
+    // emoncms occasionally answers feed/fetch.json with `false` or an error
+    // object at HTTP 200 (auth hiccup / transient backend error). That must
+    // surface as an error, not a cached all-null object.
+    for (const bad of ["false", '{"success":false}']) {
+      (globalThis.fetch as any).mockResolvedValueOnce(new Response(bad, { status: 200 }));
+      const c = ctx();
+      const res = await worker.fetch(new Request("https://w/live"), env, c);
+      await waitOnExecutionContext(c);
+      expect(res.status).toBe(502);
+      const cached = await caches.default.match(new Request("https://w/live"));
+      expect(cached).toBeFalsy();
+    }
+  });
+
   it("rejects POST with 405", async () => {
     const res = await worker.fetch(new Request("https://w/live", { method: "POST" }), env, ctx());
     expect(res.status).toBe(405);

@@ -89,6 +89,7 @@ export default {
       // positional array) so the client mapping is order-independent forever.
       return proxy(request.url, upstream, env, ctx, 10, (text) => {
         const arr = JSON.parse(text) as (number | null)[];
+        if (!Array.isArray(arr)) throw new Error("upstream /live body is not an array");
         const obj: Record<string, number | null> = {};
         FEED_IDS.forEach((id, i) => {
           obj[id] = arr[i] ?? null;
