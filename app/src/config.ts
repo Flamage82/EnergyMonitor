@@ -8,7 +8,7 @@ const feeds: FeedGroups = {
 
 const feedLabels: Record<number, string> = {
   384745: "Light 1", 384746: "Power 1", 384747: "Light 2", 384748: "Power 2",
-  384750: "Oven", 384751: "Hot water", 384752: "Air conditioner", 384754: "Pool",
+  384750: "Oven", 384751: "Water treatment", 384752: "Air conditioner", 384754: "Pool",
   384753: "Solar", 545440: "Nicki",
 };
 

@@ -10,6 +10,12 @@
   --export: #15803d;
   --export-bg: #dcfce7;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+
+  /* Chart series — validated categorical hues (blue / aqua / yellow). Aqua for
+     Nicki reads clearly apart from the main-house blue; the old violet did not. */
+  --chart-main: #2a78d6;
+  --chart-nicki: #1baf7a;
+  --chart-solar: #eda100;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +31,11 @@
     --export: #4ade80;
     --export-bg: #10331d;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+    /* Same three hues, stepped for the dark card surface. */
+    --chart-main: #3987e5;
+    --chart-nicki: #199e70;
+    --chart-solar: #c98500;
   }
 }
 
