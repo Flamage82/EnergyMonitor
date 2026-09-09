@@ -34,8 +34,12 @@ ciphertext.
 - **`average=1` is load-bearing.** Without it, `feed/data.json` returns the
   instantaneous sample at each bucket's start (spikes missed). With it, the mean
   of every 5-second raw sample in the bucket. Energy = mean-power × time, so
-  bucket size does **not** change the kWh totals (measured: ~0.5% between 5-min
-  and 30-min). The Worker forces `average=1`; a client cannot turn it off.
+  bucket size does **not** change a *signed* kWh total (measured: ~0.5% between
+  5-min and 30-min). The Worker forces `average=1`; a client cannot turn it off.
+  **Exception: the import/export split** (month chart, `allocateBill`) classifies
+  each bucket by the sign of its average net, so a within-bucket swing across zero
+  is lost from both sides — ~2 kWh/day at 900 s on 8 Sep 2026. See
+  [`metering-accuracy.md`](metering-accuracy.md).
 - **emoncms has a server memory limit that returns as a fake success.** A query
   spanning ~31 days × 10 feeds at 60-second buckets makes `emoncms.org` return
   **HTTP 200 with an HTML body**: `Fatal error: Allowed memory size of

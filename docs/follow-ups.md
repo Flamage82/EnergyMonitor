@@ -59,12 +59,12 @@ Items deferred from the final whole-branch review of `feat/energy-dashboard`
   edge (neither paged away) that's two identical current-month requests every
   `billRecomputeMs`. Fine at this app's cadence/traffic; the shared single poll
   in `App.tsx` was dropped because the two panels page independently.
-- **Import/export split is bucket-size sensitive.** The "This month" chart (and
-  `allocateBill`) classify each bucket as net-import *or* net-export by its
-  average power, so within one interval a load spike and a solar surplus cancel
-  before the split is taken. At `monthBucketSeconds = 900` that understates both
-  the daily import and export bars versus what a 5-minute meter read would show;
-  the old single net-import figure was immune (the averaging nets out either
-  way). Revisit if the bars look materially low against the retailer's bill —
-  options are a finer month interval (payload cost) or asking emoncms for
-  separate positive/negative accumulations.
+- **Monitor under-reads vs. the retailer's meter — see
+  [`metering-accuracy.md`](metering-accuracy.md).** 8 Sep 2026 reconciliation:
+  bucketing costs ~1.0 kWh import / ~1.3 kWh export per day at
+  `monthBucketSeconds = 900` (fixable with emoncms accumulator feeds), but the
+  dominant error is hardware — the monitor's signed net is 16.6% short of the
+  meter at every resolution, a CT coverage/calibration problem. CT clamps for the
+  main tails to be ordered; per-feed calibration factor in `config.ts` deferred
+  until they give a reference. Re-run `scripts/reconcile-day.mjs` on each new
+  daily figure from the retailer.
