@@ -105,7 +105,11 @@ function MonthChart({ month }: { month: AsyncState<GroupBucket[]> }) {
       <XAxis dataKey="day" stroke={axis} tickFormatter={(d: string) => d.slice(8)} />
       <YAxis stroke={axis} tickFormatter={(n) => `${Math.round(n)} kWh`} />
       <Tooltip {...tooltipProps} formatter={kwhTip} />
-      <Bar dataKey="netImportKwh" fill="var(--chart-main)" name="Net import" />
+      <Legend wrapperStyle={legendStyle} />
+      {/* Grouped (no shared stackId) so import and export sit side by side per
+          day — blue for grid import, amber for solar export. */}
+      <Bar dataKey="importKwh" fill="var(--chart-main)" name="Import" />
+      <Bar dataKey="exportKwh" fill="var(--chart-solar)" name="Export" />
     </ComposedChart>
   );
 }

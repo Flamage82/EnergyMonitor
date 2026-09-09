@@ -40,8 +40,9 @@ describe("toTodayLoadPoints", () => {
 });
 
 describe("toMonthDayPoints", () => {
-  it("sums net import per Brisbane day", () => {
+  it("splits import and export per Brisbane day by each bucket's net sign", () => {
     // both buckets on 2026-09-01 Brisbane; net = main+nicki-solar
+    // bucket 1: net +2000 W (import), bucket 2: net -1000 W (export)
     const start = Date.parse("2026-08-31T14:00:00Z");
     const pts = toMonthDayPoints(
       [b(start, 2000, 0, 0), b(start + 1800_000, 0, 0, 1000)],
@@ -49,6 +50,9 @@ describe("toMonthDayPoints", () => {
     );
     expect(pts).toHaveLength(1);
     expect(pts[0].day).toBe("2026-09-01");
-    expect(pts[0].netImportKwh).toBeCloseTo((2000 * 1800 - 1000 * 1800) / 3_600_000, 6);
+    // A bucket's export never offsets another bucket's import — each side is
+    // integrated on its own, matching how the bill settles.
+    expect(pts[0].importKwh).toBeCloseTo((2000 * 1800) / 3_600_000, 6);
+    expect(pts[0].exportKwh).toBeCloseTo((1000 * 1800) / 3_600_000, 6);
   });
 });
