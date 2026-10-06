@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { config } from "../config";
 import { fetchSeries } from "../api/worker";
+import { calibrateSeries } from "../lib/calibration";
 import { buildBuckets, buildFeedBuckets, type FeedBucket, type GroupBucket } from "../lib/energy";
 import { dayWindow, monthWindow } from "../lib/time";
 import { usePolledFetch, type AsyncState } from "./usePolledFetch";
@@ -30,11 +31,11 @@ function useBucketRange(
 ): AsyncState<GroupBucket[]> {
   return usePolledFetch<GroupBucket[]>(
     async (signal) => {
-      const series = await fetchSeries(
+      const series = calibrateSeries(await fetchSeries(
         config.workerBaseUrl,
         { ids: seriesIds, startMs, endMs, intervalSeconds: bucketSeconds },
         signal,
-      );
+      ), config.calibration);
       return buildBuckets(series, config.feeds);
     },
     intervalMs,
@@ -68,11 +69,11 @@ export function useTodaySeries(now: Date = new Date(), dayOffset = 0): AsyncStat
   const interval = dayOffset === 0 ? config.todayRefreshMs : STATIC_POLL_MS;
   return usePolledFetch<TodaySeries>(
     async (signal) => {
-      const series = await fetchSeries(
+      const series = calibrateSeries(await fetchSeries(
         config.workerBaseUrl,
         { ids: seriesIds, startMs: start, endMs: end, intervalSeconds: config.bucketSeconds },
         signal,
-      );
+      ), config.calibration);
       return {
         buckets: buildBuckets(series, config.feeds),
         feedBuckets: buildFeedBuckets(series, seriesIds),

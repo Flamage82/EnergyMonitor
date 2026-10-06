@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { config } from "../config";
+import { factorAt } from "../lib/calibration";
 
 describe("config", () => {
   it("lists all 10 feed ids across groups with labels", () => {
@@ -18,6 +19,30 @@ describe("config", () => {
     const covered = config.loadGroups.flatMap((g) => g.ids).sort((a, b) => a - b);
     expect(covered).toEqual([...config.allFeedIds].sort((a, b) => a - b));
     for (const g of config.loadGroups) expect(g.label).toBeTruthy();
+  });
+  it("doubles every phase-C channel, allowing for the old upstream solar ×2", () => {
+    const at = (s: string) => Date.parse(`${s}:00+10:00`);
+    const now = at("2026-10-07T12:00");
+    const before = at("2026-10-06T12:00");
+    expect(factorAt(config.calibration, 384752, before)).toBe(2); // Air conditioner
+    expect(factorAt(config.calibration, 384754, before)).toBe(2); // Pool
+    expect(factorAt(config.calibration, 384753, before)).toBe(2); // Solar
+    expect(factorAt(config.calibration, 384752, at("2026-01-01T12:00"))).toBe(2);
+    // The IoTaWatt's emoncms outputs apply the ×2 themselves from 7 Oct 09:29.
+    for (const id of [384752, 384754, 384753]) {
+      expect(factorAt(config.calibration, id, at("2026-10-07T09:28"))).toBe(2);
+      expect(factorAt(config.calibration, id, now)).toBe(1);
+    }
+    // The emoncms formula already doubled solar until 28 Sep.
+    expect(factorAt(config.calibration, 384753, at("2026-09-20T12:00"))).toBe(1);
+    // C − A tests read correctly as logged.
+    expect(factorAt(config.calibration, 384753, at("2026-10-04T12:00"))).toBe(1);
+    // Water treatment was logged doubled from 28 Sep to 4 Oct.
+    expect(factorAt(config.calibration, 384751, at("2026-10-01T12:00"))).toBe(0.5);
+    expect(factorAt(config.calibration, 384751, now)).toBe(1);
+    for (const id of [384745, 384746, 384747, 384748, 384750, 545440]) {
+      expect(factorAt(config.calibration, id, now)).toBe(1);
+    }
   });
   it("carries the feed reconfiguration data-floor date", () => {
     expect(config.dataStartDate).toBe("2026-09-07");

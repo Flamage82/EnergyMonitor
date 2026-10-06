@@ -1,6 +1,7 @@
 import type {
   FeedGroups, LoadGroup, Tariff, Shares, SolarAllocation,
 } from "./lib/energy";
+import type { Calibration } from "./lib/calibration";
 
 const feeds: FeedGroups = {
   main: [384745, 384746, 384747, 384748, 384750, 384751, 384752, 384754],
@@ -28,6 +29,33 @@ const loadGroups: LoadGroup[] = [
   { label: "Solar", ids: [384753] },
 ];
 
+// Every phase-C channel (air conditioner, pool, solar) logs half its real
+// power; phase A and Nicki (B) are correct. Fitted against the retailer's
+// half-hourly data — see docs/metering-accuracy.md and
+// scripts/fit-multipliers.mjs. Steps are the factor from that local time on.
+// Since 7 Oct 09:29 the IoTaWatt's emoncms output formulas apply the ×2
+// themselves, so these steps only correct the history logged before that.
+const brisbane = (s: string) => Date.parse(`${s}:00+10:00`);
+const always = -Infinity;
+const outputsDoubled = brisbane("2026-10-07T09:29"); // first doubled post 09:29:30
+const calibration: Calibration = {
+  384752: [{ fromMs: always, factor: 2 }, { fromMs: outputsDoubled, factor: 1 }], // Air conditioner
+  384754: [{ fromMs: always, factor: 2 }, { fromMs: outputsDoubled, factor: 1 }], // Pool
+  384753: [                                                      // Solar
+    { fromMs: always, factor: 1 },                               // emoncms formula already ×2
+    { fromMs: brisbane("2026-09-28T13:25"), factor: 2 },         // formula ×2 removed
+    { fromMs: brisbane("2026-10-04T11:10"), factor: 1 },         // C − A test, reads true
+    { fromMs: brisbane("2026-10-04T12:40"), factor: 2 },
+    { fromMs: outputsDoubled, factor: 1 },
+  ],
+  384751: [                                                      // Water treatment
+    // Logged doubled for this window: its baseline went 45 → 97 W while the
+    // meter saw no change.
+    { fromMs: brisbane("2026-09-28T13:25"), factor: 0.5 },
+    { fromMs: brisbane("2026-10-04T12:40"), factor: 1 },
+  ],
+};
+
 const tariff: Tariff = {
   importCentsPerKwh: 27.83,
   supplyChargeCentsPerDay: 132.484,
@@ -43,6 +71,7 @@ interface AppConfig {
   feeds: FeedGroups;
   feedLabels: Record<number, string>;
   loadGroups: LoadGroup[];
+  calibration: Calibration;
   allFeedIds: number[];
   tariff: Tariff;
   shares: Shares;
@@ -72,6 +101,7 @@ export const config = {
   feeds,
   feedLabels,
   loadGroups,
+  calibration,
   allFeedIds: [...feeds.main, ...feeds.nicki, ...feeds.solar],
   tariff,
   shares,

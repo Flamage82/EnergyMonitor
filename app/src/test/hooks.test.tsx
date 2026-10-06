@@ -55,6 +55,15 @@ describe("useLiveFeeds", () => {
     expect(spy).toHaveBeenCalledWith("https://worker.test", config.allFeedIds, expect.anything());
   });
 
+  it("applies the calibration in force now to live values", async () => {
+    vi.spyOn(api, "fetchLive").mockResolvedValue({ 384746: 100, 384752: 500 } as api.LiveValues);
+    // Before the IoTaWatt outputs took over the ×2: Power 1 (phase A) ×1,
+    // the air conditioner (phase C) ×2.
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-06T12:00:00+10:00"));
+    const { result } = renderHook(() => useLiveFeeds());
+    await waitFor(() => expect(result.current.data).toEqual({ 384746: 100, 384752: 1000 }));
+  });
+
   it("surfaces a fetch failure as an error string", async () => {
     vi.spyOn(api, "fetchLive").mockRejectedValue(new Error("proxy responded 502"));
     const { result } = renderHook(() => useLiveFeeds());
@@ -114,6 +123,21 @@ describe("useTodaySeries", () => {
     expect(result.current.data!.buckets[0].mainW).toBe(1000);
     expect(result.current.data!.feedBuckets[0].watts[384746]).toBe(1000);
     expect(result.current.data!.feedBuckets[0].watts[384753]).toBe(-500);
+  });
+
+  it("applies the calibration to both the grouped and the per-feed buckets", async () => {
+    const t = Date.parse("2026-10-06T12:00:00+10:00");
+    vi.spyOn(api, "fetchSeries").mockResolvedValue([
+      { feedid: "384746", data: [[t, 1000]] }, // Power 1, phase A
+      { feedid: "384752", data: [[t, 500]] },  // Air conditioner, phase C
+      { feedid: "384753", data: [[t, -800]] }, // Solar, phase C
+    ] as any);
+    const { result } = renderHook(() => useTodaySeries(new Date(t)));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+
+    expect(result.current.data!.feedBuckets[0].watts[384752]).toBe(1000);
+    expect(result.current.data!.buckets[0].mainW).toBe(2000);
+    expect(result.current.data!.buckets[0].solarW).toBe(1600);
   });
 
   it("fetches a whole past day at a negative offset", async () => {
