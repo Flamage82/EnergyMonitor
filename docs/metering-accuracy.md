@@ -22,9 +22,13 @@ IoTaWatt forces. Export is negative.
 | Imports | 546961 | the integrator's positive part |
 | Exports | 546962 | the integrator's negative part |
 
-Before the bill switches to them, check that Imports and Exports are split
-per sample, not from each 30 s average. In a mixed 30 s window, Imports
-should exceed max(0, Net). Then check them against the next AGL download.
+**Per-sample split confirmed (7 Oct, passing cloud).** In 3 of the first 17
+posts, both Imports and Exports were non-zero. At 09:53:00, Net was +101 W
+but Imports was 614 W and Exports −512 W, where netting the 30 s average gives
+101 W of import only. Imports + Exports equals Net on every post. Averages of
+these feeds therefore stay correct at any bucket size: they remove the
+bucketing shortfall. Still to do before the bill switches over: check them
+against the next AGL download.
 
 **Fix first applied in the app (7 Oct, before the source change).** `config.calibration` in
 `app/src/config.ts` holds a per-feed timeline of factors. `lib/calibration.ts`
