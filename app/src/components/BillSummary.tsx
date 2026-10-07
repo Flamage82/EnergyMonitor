@@ -1,22 +1,20 @@
 import { config } from "../config";
 import type { AsyncState } from "../hooks/usePolledFetch";
 import { allocateBill, inferBucketSeconds, type GroupBucket, type HouseholdBill } from "../lib/energy";
-import { effectiveMonthWindow, monthLabel } from "../lib/time";
+import { effectiveMonthWindow, localDateStartMs, monthLabel } from "../lib/time";
 import { Section } from "./Section";
 
 const money = (n: number) => `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
 
 // Plain-language version of the data-floor caveat for a household reader:
-// "excludes 1–6 Sep (before monitoring was reconfigured)".
+// "Excludes usage before 7 Oct, 10:00 am (before monitoring was corrected)."
 function excludedDaysNote(dataStartDate: string, timeZone: string): string {
-  const [y, m, d] = dataStartDate.split("-").map(Number);
-  // Mid-month midday UTC so the month name can't slip a day either way when
-  // formatted in `timeZone`.
-  const mon = new Intl.DateTimeFormat("en-AU", { timeZone, month: "short" })
-    .format(new Date(Date.UTC(y, m - 1, 15, 12)));
-  const lastExcluded = d - 1;
-  const range = lastExcluded > 1 ? `1–${lastExcluded}` : "1";
-  return `Excludes ${range} ${mon} (before monitoring was reconfigured).`;
+  const hasTime = dataStartDate.includes("T");
+  const label = new Intl.DateTimeFormat("en-AU", {
+    timeZone, day: "numeric", month: "short",
+    ...(hasTime ? { hour: "numeric", minute: "2-digit" } : {}),
+  }).format(new Date(localDateStartMs(dataStartDate, timeZone)));
+  return `Excludes usage before ${label} (before monitoring was corrected).`;
 }
 
 function Card({ testId, name, bill }: { testId: string; name: string; bill: HouseholdBill }) {

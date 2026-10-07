@@ -44,8 +44,8 @@ describe("config", () => {
       expect(factorAt(config.calibration, id, now)).toBe(1);
     }
   });
-  it("carries the feed reconfiguration data-floor date", () => {
-    expect(config.dataStartDate).toBe("2026-09-07");
+  it("carries the data-floor cutoff (outputs corrected 7 Oct 10:00)", () => {
+    expect(config.dataStartDate).toBe("2026-10-07T10:00");
   });
   it("uses a coarser bucket for the whole-month query", () => {
     expect(config.bucketSeconds).toBe(300);

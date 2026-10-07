@@ -23,10 +23,15 @@ export function zonedTimeToUtcMs(
   return guess - offset;
 }
 
-/** Epoch ms of `isoDate` ("YYYY-MM-DD") at 00:00:00 local to `timeZone`. */
+/**
+ * Epoch ms of `isoDate` local to `timeZone`: "YYYY-MM-DD" means 00:00, and an
+ * optional "THH:mm" gives a time of day.
+ */
 export function localDateStartMs(isoDate: string, timeZone: string): number {
-  const [y, m, d] = isoDate.split("-").map(Number);
-  return zonedTimeToUtcMs(y, m, d, 0, 0, 0, timeZone);
+  const [date, time = "00:00"] = isoDate.split("T");
+  const [y, m, d] = date.split("-").map(Number);
+  const [h, min] = time.split(":").map(Number);
+  return zonedTimeToUtcMs(y, m, d, h, min, 0, timeZone);
 }
 
 export function monthStartMs(now: Date, timeZone: string): number {

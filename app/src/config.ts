@@ -92,12 +92,14 @@ export const config = {
   // site's requests to whoever happens to own an example domain.
   workerBaseUrl: (import.meta.env.VITE_WORKER_URL as string | undefined) || "",
   timezone: "Australia/Brisbane",
-  // Feeds were reconfigured on this date (Australia/Brisbane local). Data before
-  // it is ignored for the month-to-date bill and the "this month" chart. Once the
-  // billing month starts after this date the `Math.max` in `effectiveMonthWindow`
-  // always picks the month start, so the key stops having any effect — but
-  // removing it still means editing `lib/time.ts` (and its callers), so leave it.
-  dataStartDate: "2026-09-07",
+  // The IoTaWatt outputs were corrected at this local time ("YYYY-MM-DD", with an
+  // optional "THH:mm", Australia/Brisbane). Data before it is ignored for the
+  // month-to-date bill and the "this month" chart, and the day chart pages back
+  // no further than this day. Once the billing month starts after this date the
+  // `Math.max` in `effectiveMonthWindow` always picks the month start, so the key
+  // stops having any effect — but removing it still means editing `lib/time.ts`
+  // (and its callers), so leave it.
+  dataStartDate: "2026-10-07T10:00",
   feeds,
   feedLabels,
   loadGroups,

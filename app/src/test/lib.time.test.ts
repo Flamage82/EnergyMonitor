@@ -36,6 +36,20 @@ describe("time helpers", () => {
     expect(localDateStartMs("2026-09-07", TZ)).toBe(Date.parse("2026-09-06T14:00:00Z"));
   });
 
+  it("localDateStartMs honours an optional local time of day", () => {
+    // 2026-10-07 10:00 +10:00 === 2026-10-07 00:00 UTC
+    expect(localDateStartMs("2026-10-07T10:00", TZ)).toBe(Date.parse("2026-10-07T00:00:00Z"));
+  });
+
+  it("effectiveMonthWindow clamps to a mid-day floor and prorates the part day", () => {
+    const floorMs = Date.parse("2026-10-07T00:00:00Z"); // Oct 7 10:00 Brisbane
+    const now = new Date(floorMs + 1.25 * 86_400_000);
+    const w = effectiveMonthWindow(now, TZ, "2026-10-07T10:00");
+    expect(w.startMs).toBe(floorMs);
+    expect(w.floored).toBe(true);
+    expect(w.daysElapsed).toBeCloseTo(1.25, 6);
+  });
+
   it("localDayKey buckets an instant into the Brisbane calendar day", () => {
     // 2026-09-06T15:30:00Z === 2026-09-07 01:30 Brisbane
     expect(localDayKey(Date.parse("2026-09-06T15:30:00Z"), TZ)).toBe("2026-09-07");
@@ -90,6 +104,12 @@ describe("dayWindow", () => {
   it("flags atFloor once the day is at or before dataStartDate", () => {
     expect(dayWindow(now, TZ, "2026-09-07", -1).atFloor).toBe(true);
     expect(dayWindow(now, TZ, "2026-09-07", -2).atFloor).toBe(true);
+  });
+
+  it("treats the day containing a mid-day floor as the floor day", () => {
+    const oct8 = new Date("2026-10-08T05:00:00Z"); // Oct 8 15:00 Brisbane
+    expect(dayWindow(oct8, TZ, "2026-10-07T10:00", 0).atFloor).toBe(false);
+    expect(dayWindow(oct8, TZ, "2026-10-07T10:00", -1).atFloor).toBe(true);
   });
 });
 

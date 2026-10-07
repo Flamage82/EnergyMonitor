@@ -82,11 +82,11 @@ describe("useMonthData", () => {
       { feedid: "545440", data: [[1788184800000, 200]] },  // Nicki
       { feedid: "384753", data: [[1788184800000, -500]] }, // Solar
     ] as any);
-    const now = new Date("2026-09-07T05:00:00Z");
+    const now = new Date("2026-10-08T05:00:00Z");
     const { result } = renderHook(() => useMonthData(now));
     await waitFor(() => expect(result.current.data).not.toBeNull());
-    // month start (Sep 1) is before the data-floor (Sep 7), so the floor wins
-    expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-09-06T14:00:00Z"));
+    // month start (Oct 1) is before the data floor (Oct 7 10:00), so the floor wins
+    expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-10-07T00:00:00Z"));
     // The whole-month query uses the coarser bucket so the payload stays ~1 MB.
     expect(spy.mock.calls[0][1].intervalSeconds).toBe(900);
     const bucket = result.current.data![0];
@@ -96,11 +96,11 @@ describe("useMonthData", () => {
 
   it("fetches the whole previous month at a negative offset", async () => {
     const spy = vi.spyOn(api, "fetchSeries").mockResolvedValue([] as any);
-    const now = new Date("2026-11-15T05:00:00Z");
+    const now = new Date("2026-12-15T05:00:00Z");
     renderHook(() => useMonthData(now, -1));
     await waitFor(() => expect(spy).toHaveBeenCalled());
-    expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-09-30T14:00:00Z")); // Oct 1 Brisbane
-    expect(spy.mock.calls[0][1].endMs).toBe(Date.parse("2026-10-31T14:00:00Z")); // Nov 1 Brisbane
+    expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-10-31T14:00:00Z")); // Nov 1 Brisbane
+    expect(spy.mock.calls[0][1].endMs).toBe(Date.parse("2026-11-30T14:00:00Z")); // Dec 1 Brisbane
   });
 });
 

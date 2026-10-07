@@ -51,8 +51,8 @@ describe("<LiveNow>", () => {
 });
 
 describe("<EnergyChart>", () => {
-  // 2026-09-08 15:00 Brisbane; the configured data floor is 2026-09-07.
-  const now = new Date("2026-09-08T05:00:00Z");
+  // 2026-10-08 15:00 Brisbane; the configured data floor is 2026-10-07 10:00.
+  const now = new Date("2026-10-08T05:00:00Z");
 
   const mockData = () => {
     vi.spyOn(seriesHook, "useTodaySeries").mockReturnValue(todayState());
@@ -112,9 +112,9 @@ describe("<EnergyChart>", () => {
     mockData();
     render(<EnergyChart now={now} />);
     fireEvent.click(screen.getByRole("button", { name: "Previous" }));
-    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent(/Mon.*7.*Sep/);
+    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent(/Wed.*7.*Oct/);
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
-    // Sep 7 is the configured floor — no earlier day to page to.
+    // Oct 7 holds the configured floor — no earlier day to page to.
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
   });
 
@@ -123,15 +123,15 @@ describe("<EnergyChart>", () => {
     render(<EnergyChart now={now} />);
     fireEvent.click(screen.getByRole("button", { name: "Previous" }));
     fireEvent.click(screen.getByRole("button", { name: /by load/i }));
-    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent(/Mon.*7.*Sep/);
+    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent(/Wed.*7.*Oct/);
   });
 
   it("pages the month view by whole months and labels it", () => {
     mockData();
     localStorage.setItem("energychart.range", "month");
     render(<EnergyChart now={now} />);
-    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent("September 2026");
-    // No prior month has data, and September is the live month.
+    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent("October 2026");
+    // No prior month has data, and October is the live month.
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
   });
@@ -140,9 +140,9 @@ describe("<EnergyChart>", () => {
 describe("<BillSummary>", () => {
   // `now` and the month data are both props now — App owns the single
   // useMonthData mount — so no fake clock or hook spy is needed.
-  const now = new Date("2026-09-15T05:00:00Z");
+  const now = new Date("2026-10-15T05:00:00Z");
   const buckets: GroupBucket[] = [
-    { tMs: Date.parse("2026-09-08T14:00:00Z"), mainW: 1000, nickiW: 500, solarW: 200, partial: false },
+    { tMs: Date.parse("2026-10-08T14:00:00Z"), mainW: 1000, nickiW: 500, solarW: 200, partial: false },
   ];
 
   afterEach(() => {
@@ -159,7 +159,7 @@ describe("<BillSummary>", () => {
   it("notes the excluded pre-monitoring days when the data floor is in effect", () => {
     render(<BillSummary now={now} month={monthState(buckets)} />);
     expect(
-      screen.getByText(/Excludes 1–6 Sept \(before monitoring was reconfigured\)\./),
+      screen.getByText(/Excludes usage before 7 Oct, 10:00\s?am \(before monitoring was corrected\)\./),
     ).toBeInTheDocument();
   });
 
