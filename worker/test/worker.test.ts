@@ -40,7 +40,7 @@ describe("worker /live", () => {
 
   it("proxies /live to emoncms feed/fetch, keys the array by FEED_IDS, and adds CORS + cache headers", async () => {
     (globalThis.fetch as any).mockResolvedValueOnce(
-      new Response("[1,2,3,4,5,6,7,8,9,10]", { status: 200 }),
+      new Response("[1,2,3,4,5,6,7,8,9,10,11,12,13]", { status: 200 }),
     );
     const c = ctx();
     const res = await worker.fetch(new Request("https://w/live"), env, c);
@@ -59,6 +59,9 @@ describe("worker /live", () => {
       "384753": 8,
       "384754": 9,
       "545440": 10,
+      "546960": 11,
+      "546961": 12,
+      "546962": 13,
     });
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:5173");
     expect(res.headers.get("Cache-Control")).toContain("s-maxage=10");
@@ -166,6 +169,16 @@ describe("worker /series", () => {
     const res = await worker.fetch(
       new Request("https://w/series?ids=999999&start=1&end=2&interval=300"), env, ctx());
     expect(res.status).toBe(403);
+  });
+
+  it("accepts the integrator feeds", async () => {
+    const c = ctx();
+    const res = await worker.fetch(
+      new Request("https://w/series?ids=546960,546961,546962&start=1788184800000&end=1788188400000&interval=1800"),
+      env, c);
+    await waitOnExecutionContext(c);
+    expect(res.status).toBe(200);
+    await caches.default.delete(new Request(seriesKey("546960,546961,546962", 1788184800000, 1788188400000, 1800)));
   });
 
   it("rejects a range over 40 days with 400", async () => {
