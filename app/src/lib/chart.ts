@@ -1,4 +1,4 @@
-import { integrateKwh, type FeedBucket, type GroupBucket, type LoadGroup } from "./energy";
+import { gridFlowW, integrateKwh, type FeedBucket, type GroupBucket, type LoadGroup } from "./energy";
 import { localDayKey } from "./time";
 
 // A watts reading below zero is measurement noise (most often solar drifting
@@ -33,18 +33,16 @@ export function toTodayLoadPoints(
 }
 
 // One row per local day, with the day's grid import and export as separate
-// non-negative totals. Each bucket is classified by the sign of its own net
-// (main + nicki - solar) and integrated onto one side only — an export bucket
-// never nets against an import bucket, because the retailer settles each
-// interval independently (see `allocateBill`).
+// non-negative totals, from the same per-bucket split the bill uses
+// (`gridFlowW`) — an export never nets against an import.
 export function toMonthDayPoints(buckets: GroupBucket[], bucketSeconds: number, timeZone: string) {
   const byDay = new Map<string, { importKwh: number; exportKwh: number }>();
   for (const b of buckets) {
     const day = localDayKey(b.tMs, timeZone);
     const row = byDay.get(day) ?? { importKwh: 0, exportKwh: 0 };
-    const netW = b.mainW + b.nickiW - b.solarW;
-    if (netW >= 0) row.importKwh += integrateKwh(netW, bucketSeconds);
-    else row.exportKwh += integrateKwh(-netW, bucketSeconds);
+    const { importW, exportW } = gridFlowW(b);
+    row.importKwh += integrateKwh(importW, bucketSeconds);
+    row.exportKwh += integrateKwh(exportW, bucketSeconds);
     byDay.set(day, row);
   }
   return [...byDay.entries()].map(([day, sides]) => ({ day, ...sides }));

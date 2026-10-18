@@ -55,4 +55,14 @@ describe("toMonthDayPoints", () => {
     expect(pts[0].importKwh).toBeCloseTo((2000 * 1800) / 3_600_000, 6);
     expect(pts[0].exportKwh).toBeCloseTo((1000 * 1800) / 3_600_000, 6);
   });
+
+  it("uses the integrator's split when a bucket has it", () => {
+    const start = Date.parse("2026-08-31T14:00:00Z");
+    const pts = toMonthDayPoints(
+      [{ ...b(start, 1000, 0, 800), importW: 500, exportW: 300 }],
+      1800, "Australia/Brisbane",
+    );
+    expect(pts[0].importKwh).toBeCloseTo((500 * 1800) / 3_600_000, 6);
+    expect(pts[0].exportKwh).toBeCloseTo((300 * 1800) / 3_600_000, 6);
+  });
 });

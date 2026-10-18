@@ -7,6 +7,9 @@ import { dayWindow, monthWindow } from "../lib/time";
 import { usePolledFetch, type AsyncState } from "./usePolledFetch";
 
 const seriesIds = [...config.feeds.main, ...config.feeds.nicki, ...config.feeds.solar];
+// The month query adds the integrator's grid split, for the bill and the daily
+// import/export bars. The day chart plots circuits only, so it skips them.
+const monthIds = [...seriesIds, config.gridFeeds.imports, config.gridFeeds.exports];
 
 // A day or month in the past is settled data — poll it daily rather than at the
 // live-view cadence so paging back doesn't spin up a fast refetch loop.
@@ -33,10 +36,10 @@ function useBucketRange(
     async (signal) => {
       const series = calibrateSeries(await fetchSeries(
         config.workerBaseUrl,
-        { ids: seriesIds, startMs, endMs, intervalSeconds: bucketSeconds },
+        { ids: monthIds, startMs, endMs, intervalSeconds: bucketSeconds },
         signal,
       ), config.calibration);
-      return buildBuckets(series, config.feeds);
+      return buildBuckets(series, config.feeds, config.gridFeeds);
     },
     intervalMs,
     [startMs, bucketSeconds],

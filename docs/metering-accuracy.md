@@ -1,5 +1,10 @@
 # Metering accuracy — monitor vs. the retailer's meter
 
+**19 Oct 2026:** the bill now splits import/export with the IoTaWatt
+integrator, which matches AGL's split (see
+[AGL re-check](#agl-re-check-and-the-bill-switch-19-oct-2026)). The net reads
+~0.8 kWh/day under the meter since 7 Oct; cause open.
+
 **Status (7 Oct 2026):** solved in software terms. **Every phase-C channel
 reads half.** AirCon, Pool and Solar each need ×2. Phase A and Nicki (B) are
 correct. There is no constant unmetered load. A year of AGL half-hourly data
@@ -27,8 +32,40 @@ posts, both Imports and Exports were non-zero. At 09:53:00, Net was +101 W
 but Imports was 614 W and Exports −512 W, where netting the 30 s average gives
 101 W of import only. Imports + Exports equals Net on every post. Averages of
 these feeds therefore stay correct at any bucket size: they remove the
-bucketing shortfall. Still to do before the bill switches over: check them
-against the next AGL download.
+bucketing shortfall.
+
+## AGL re-check and the bill switch (19 Oct 2026)
+
+AGL half-hourly data to 17 Oct 23:59, against emoncms at 900 s (the bill's
+bucket), from the 7 Oct 10:00 cutoff. Full days 8–17 Oct, 480 half-hours, no
+null buckets:
+
+| | import kWh | vs AGL | export kWh | vs AGL |
+|---|---:|---:|---:|---:|
+| AGL | 467.60 | | 20.55 | |
+| circuits, netted per 15-min bucket (old bill) | 456.96 | −2.3% | 17.79 | −13.4% |
+| integrator Imports / Exports (new bill) | 460.78 | −1.5% | 21.50 | +4.7% |
+
+- **The integrator splits like the meter.** Energy that flowed both ways
+  within a half-hour, Σ 2·min(import, export): AGL 12.04 kWh, integrator
+  11.90, 15-min netting 4.49.
+- **Its remaining error is the net, not the split.** Net (546960) equals the
+  circuit sum; both are −7.8 kWh (−1.7%) over the 10 days. On pure-import
+  half-hours the monitor reads ~29 W under the meter. A missing constant load
+  lowers import and raises export by the same watts: the −/+ above.
+- **The ×2 still holds** (`fit-multipliers.mjs <csv> 2026-10-07T10:00`):
+  AirCon 1.98, Pool 1.99, Solar 1.96, phase A and Nicki ≈1.0. Daily net
+  error under the fixed ×2 is a mean of 0.87 kWh (max 1.41), against 0.26
+  for 8 Sep–5 Oct. That earlier figure was in-sample, but the new one is also
+  biased: 9 of 10 days read low. Open; Solar's 1.96 and the fit's −50 W
+  constant are where to look.
+
+**The bill and the month chart now use the integrator feeds** (`gridFeeds` in
+`config.ts`, `gridFlowW` in `lib/energy.ts`). Each 15-min bucket's import is
+split between the houses by `mainW / gross` as before, and a bucket can now
+both import and export. A bucket without integrator data falls back to netting
+the circuits. Over 7 Oct 10:00 → 18 Oct the bill's import went from −2.0% to
+−1.2% of AGL, and export from −14.6% to +4.5%.
 
 **Fix first applied in the app (7 Oct, before the source change).** `config.calibration` in
 `app/src/config.ts` holds a per-feed timeline of factors. `lib/calibration.ts`
@@ -40,7 +77,7 @@ logged doubled from 28 Sep 13:25 to 4 Oct 12:40, so it gets ×0.5 for that windo
 
 ## Multiplier fit (7 Oct 2026)
 
-`node scripts/fit-multipliers.mjs <AGL MyUsageData csv>` regresses AGL's
+`node scripts/fit-multipliers.mjs <AGL MyUsageData csv> [from]` regresses AGL's
 half-hourly signed net (import − export) on each channel's energy for the
 same slot: `agl_net = Σ kᵢ·Eᵢ + c`. Signed net is linear in the circuits
 whether the meter nets across phases or per phase. Each kᵢ is that channel's

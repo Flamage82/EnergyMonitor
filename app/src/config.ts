@@ -1,5 +1,5 @@
 import type {
-  FeedGroups, LoadGroup, Tariff, Shares, SolarAllocation,
+  FeedGroups, GridFeeds, LoadGroup, Tariff, Shares, SolarAllocation,
 } from "./lib/energy";
 import type { Calibration } from "./lib/calibration";
 
@@ -8,6 +8,13 @@ const feeds: FeedGroups = {
   nicki: [545440],
   solar: [384753],
 };
+
+// The IoTaWatt integrator's import/export split of the circuit net, logged
+// from 7 Oct 09:48 (the bill's data floor is later). Its formula sums the
+// circuits with the phase-C ×2 built in, so it has no `calibration` entry; if
+// a circuit's factor ever changes, change the integrator formula to match.
+// Checked against AGL in docs/metering-accuracy.md.
+const gridFeeds: GridFeeds = { imports: 546961, exports: 546962 };
 
 const feedLabels: Record<number, string> = {
   384745: "Light 1", 384746: "Power 1", 384747: "Light 2", 384748: "Power 2",
@@ -69,6 +76,7 @@ interface AppConfig {
   timezone: string;
   dataStartDate: string;
   feeds: FeedGroups;
+  gridFeeds: GridFeeds;
   feedLabels: Record<number, string>;
   loadGroups: LoadGroup[];
   calibration: Calibration;
@@ -101,6 +109,7 @@ export const config = {
   // (and its callers), so leave it.
   dataStartDate: "2026-10-07T10:00",
   feeds,
+  gridFeeds,
   feedLabels,
   loadGroups,
   calibration,

@@ -60,7 +60,10 @@ Items deferred from the final whole-branch review of `feat/energy-dashboard`
   `billRecomputeMs`. Fine at this app's cadence/traffic; the shared single poll
   in `App.tsx` was dropped because the two panels page independently.
 - **Monitor under-reads vs. the retailer's meter — see
-  [`metering-accuracy.md`](metering-accuracy.md).** 8 Sep 2026 reconciliation:
+  [`metering-accuracy.md`](metering-accuracy.md).** *19 Oct 2026: the
+  bucketing loss is fixed (the bill uses the IoTaWatt integrator feeds) and
+  phase C's ×2 is applied at the source. Still open: the net reads ~0.8 kWh/day
+  (~30 W) under AGL since 7 Oct.* 8 Sep 2026 reconciliation:
   bucketing costs ~1.0 kWh import / ~1.3 kWh export per day at
   `monthBucketSeconds = 900` (fixable with emoncms accumulator feeds), but the
   dominant error is hardware — the monitor's signed net is 16.6% short of the

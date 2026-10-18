@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { allocateBill, buildBuckets, buildFeedBuckets, inferBucketSeconds, integrateKwh, type MultiFeedSeries, type FeedGroups, type GroupBucket } from "../lib/energy";
+import { allocateBill, buildBuckets, buildFeedBuckets, gridFlowW, inferBucketSeconds, integrateKwh, type MultiFeedSeries, type FeedGroups, type GroupBucket } from "../lib/energy";
 
 const groups: FeedGroups = { main: [1, 2], nicki: [9], solar: [5] };
 
@@ -85,6 +85,65 @@ describe("buildBuckets", () => {
     expect(b[2].partial).toBe(false);
     expect(b[3].partial).toBe(true);
     expect(b[4].partial).toBe(false);
+  });
+});
+
+describe("buildBuckets grid feeds", () => {
+  const grid = { imports: 21, exports: 22 };
+  const circuits: MultiFeedSeries = [
+    { feedid: "1", data: [[0, 100], [1, 100], [2, 100]] },
+    { feedid: "2", data: [[0, 0], [1, 0], [2, 0]] },
+    { feedid: "9", data: [[0, 10], [1, 10], [2, 10]] },
+    { feedid: "5", data: [[0, -10], [1, -10], [2, -10]] },
+  ];
+
+  it("attaches the integrator's import and export, export flipped to >= 0", () => {
+    const series: MultiFeedSeries = [
+      ...circuits,
+      { feedid: "21", data: [[0, 300], [1, 0], [2, 50]] },
+      { feedid: "22", data: [[0, -200], [1, 0], [2, -0]] },
+    ];
+    const b = buildBuckets(series, groups, grid);
+    expect(b[0]).toMatchObject({ importW: 300, exportW: 200, partial: false });
+    expect(b[1]).toMatchObject({ importW: 0, exportW: 0 });
+    expect(Object.is(b[2].exportW, -0)).toBe(false);
+  });
+
+  it("leaves both unset where either grid feed has no value, without marking a gap", () => {
+    const series: MultiFeedSeries = [
+      ...circuits,
+      { feedid: "21", data: [[0, null], [1, 300], [2, 300]] },
+      { feedid: "22", data: [[0, null], [1, -100], [2, null]] },
+    ];
+    const b = buildBuckets(series, groups, grid);
+    expect(b[0].importW).toBeUndefined();
+    expect(b[0].exportW).toBeUndefined();
+    expect(b[1]).toMatchObject({ importW: 300, exportW: 100 });
+    expect(b[2].importW).toBeUndefined(); // export dropped out: fall back as a pair
+    for (const bucket of b) expect(bucket.partial).toBe(false);
+  });
+
+  it("leaves both unset when the grid feeds are absent from the response", () => {
+    const b = buildBuckets(circuits, groups, grid);
+    expect(b).toHaveLength(3);
+    for (const bucket of b) {
+      expect(bucket.importW).toBeUndefined();
+      expect(bucket.partial).toBe(false);
+    }
+  });
+});
+
+describe("gridFlowW", () => {
+  const bucket = (over: Partial<GroupBucket>): GroupBucket =>
+    ({ tMs: 0, mainW: 1000, nickiW: 0, solarW: 1500, partial: false, ...over });
+
+  it("uses the integrator's split when the bucket has it", () => {
+    expect(gridFlowW(bucket({ importW: 120, exportW: 620 }))).toEqual({ importW: 120, exportW: 620 });
+  });
+
+  it("falls back to the sign of the circuit net", () => {
+    expect(gridFlowW(bucket({}))).toEqual({ importW: 0, exportW: 500 });
+    expect(gridFlowW(bucket({ solarW: 400 }))).toEqual({ importW: 600, exportW: 0 });
   });
 });
 
@@ -226,6 +285,52 @@ describe("allocateBill - mainHouseFirst", () => {
     // main_net 0, solar_left 200, nicki_net 600
     expect(r.mainHouse.importKwh).toBe(0);
     expect(r.nicki.importKwh).toBeCloseTo(600 * 1800 / 3_600_000, 9);
+  });
+});
+
+describe("allocateBill - integrator split", () => {
+  const kwh = (w: number) => (w * 1800) / 3_600_000;
+
+  it("bills import and credits export from the same bucket", () => {
+    // gross 2000 W, main 75%; the circuits net to +600 W but the integrator saw
+    // 1000 W in and 400 W out across the bucket's samples
+    const b: GroupBucket[] = [
+      { tMs: 0, mainW: 1500, nickiW: 500, solarW: 1400, importW: 1000, exportW: 400, partial: false },
+    ];
+    const r = allocateBill(b, { ...base, solarAllocation: "proportional" });
+    expect(r.mainHouse.importKwh).toBeCloseTo(kwh(1000) * 0.75, 9);
+    expect(r.nicki.importKwh).toBeCloseTo(kwh(1000) * 0.25, 9);
+    const credit = kwh(400) * 0.05;
+    expect(r.mainHouse.solarCreditShare).toBeCloseTo(-credit * 4 / 5, 9);
+    expect(r.nicki.solarCreditShare).toBeCloseTo(-credit * 1 / 5, 9);
+  });
+
+  it("bills import in a bucket whose circuit net is export", () => {
+    const b: GroupBucket[] = [
+      { tMs: 0, mainW: 200, nickiW: 200, solarW: 1000, importW: 100, exportW: 700, partial: false },
+    ];
+    const r = allocateBill(b, { ...base, solarAllocation: "proportional" });
+    expect(r.mainHouse.importKwh + r.nicki.importKwh).toBeCloseTo(kwh(100), 9);
+    expect(r.mainHouse.importKwh).toBeCloseTo(kwh(50), 9);
+  });
+
+  it("mainHouseFirst keeps its split ratio, scaled to the integrator's import", () => {
+    // netted split would be main 600 : nicki 1000
+    const b: GroupBucket[] = [
+      { tMs: 0, mainW: 1000, nickiW: 1000, solarW: 400, importW: 2000, exportW: 400, partial: false },
+    ];
+    const r = allocateBill(b, { ...base, solarAllocation: "mainHouseFirst" });
+    expect(r.mainHouse.importKwh).toBeCloseTo(kwh(2000) * 600 / 1600, 9);
+    expect(r.nicki.importKwh).toBeCloseTo(kwh(2000) * 1000 / 1600, 9);
+  });
+
+  it("mainHouseFirst falls back to the gross split when the circuits net to export", () => {
+    const b: GroupBucket[] = [
+      { tMs: 0, mainW: 300, nickiW: 100, solarW: 1000, importW: 80, exportW: 680, partial: false },
+    ];
+    const r = allocateBill(b, { ...base, solarAllocation: "mainHouseFirst" });
+    expect(r.mainHouse.importKwh).toBeCloseTo(kwh(80) * 0.75, 9);
+    expect(r.nicki.importKwh).toBeCloseTo(kwh(80) * 0.25, 9);
   });
 });
 
