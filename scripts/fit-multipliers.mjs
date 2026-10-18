@@ -63,9 +63,14 @@ function deviceAt(t) {
 
 const csvPath = process.argv[2];
 if (!csvPath) {
-  console.error("usage: node scripts/fit-multipliers.mjs <AGL MyUsageData csv>");
+  console.error("usage: node scripts/fit-multipliers.mjs <AGL MyUsageData csv> [from YYYY-MM-DD[THH:MM]]");
   process.exit(1);
 }
+// Optional start, to fit only a later config period; never before FIRST_USABLE.
+const fromArg = process.argv[3];
+const FROM = fromArg
+  ? Math.max(FIRST_USABLE, at(fromArg.length === 10 ? `${fromArg}T00:00` : fromArg))
+  : FIRST_USABLE;
 
 // AGL rows: ...,RateTypeDescription,StartDate,EndDate,ProfileReadValue,...
 // "Generalusage" is import, "Solar" is export; StartDate is dd/mm/yyyy local.
@@ -97,7 +102,7 @@ async function fetchSeries(start, end) {
 
 // Join: one row per half-hour with every feed present, normalised to raw ×1 kWh.
 const rows = [];
-for (let s = FIRST_USABLE; s < aglEnd; s += 30 * 86400e3) {
+for (let s = FROM; s < aglEnd; s += 30 * 86400e3) {
   const e = Math.min(s + 30 * 86400e3, aglEnd);
   const byId = new Map((await fetchSeries(s, e)).map((x) => [Number(x.feedid), x.data]));
   const n = byId.get(FEEDS[0].id).length;
@@ -118,7 +123,7 @@ for (let s = FIRST_USABLE; s < aglEnd; s += 30 * 86400e3) {
   }
 }
 if (rows.length < 100) {
-  console.error(`only ${rows.length} usable half-hours — need data after ${new Date(FIRST_USABLE).toISOString()}`);
+  console.error(`only ${rows.length} usable half-hours — need data after ${new Date(FROM).toISOString()}`);
   process.exit(1);
 }
 
