@@ -62,8 +62,9 @@ Items deferred from the final whole-branch review of `feat/energy-dashboard`
 - **Monitor under-reads vs. the retailer's meter — see
   [`metering-accuracy.md`](metering-accuracy.md).** *19 Oct 2026: the
   bucketing loss is fixed (the bill uses the IoTaWatt integrator feeds) and
-  phase C's ×2 is applied at the source. Still open: the net reads ~0.8 kWh/day
-  (~30 W) under AGL since 7 Oct.* 8 Sep 2026 reconciliation:
+  phase C's ×2 is applied at the source. The VT cal went to 20.65 at ~09:40
+  that day to close most of a ~0.9 kWh/day net shortfall; re-check with the
+  next AGL download (`fit-multipliers.mjs <csv> 2026-10-19T10:00`).* 8 Sep 2026 reconciliation:
   bucketing costs ~1.0 kWh import / ~1.3 kWh export per day at
   `monthBucketSeconds = 900` (fixable with emoncms accumulator feeds), but the
   dominant error is hardware — the monitor's signed net is 16.6% short of the

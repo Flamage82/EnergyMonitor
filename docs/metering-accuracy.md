@@ -2,8 +2,11 @@
 
 **19 Oct 2026:** the bill now splits import/export with the IoTaWatt
 integrator, which matches AGL's split (see
-[AGL re-check](#agl-re-check-and-the-bill-switch-19-oct-2026)). The net reads
-~0.8 kWh/day under the meter since 7 Oct; cause open.
+[AGL re-check](#agl-re-check-and-the-bill-switch-19-oct-2026)). The net read
+~0.9 kWh/day under the meter after 9 Oct. Partly the VT calibration, which was
+set to 20.65 at ~09:40 on 19 Oct
+([VT changes](#vt-calibration-changes-and-the-2065-setting-19-oct-2026)).
+Re-check against AGL about a week later.
 
 **Status (7 Oct 2026):** solved in software terms. **Every phase-C channel
 reads half.** AirCon, Pool and Solar each need ×2. Phase A and Nicki (B) are
@@ -59,6 +62,48 @@ null buckets:
   for 8 Sep–5 Oct. That earlier figure was in-sample, but the new one is also
   biased: 9 of 10 days read low. Open; Solar's 1.96 and the fit's −50 W
   constant are where to look.
+
+### VT calibration changes and the 20.65 setting (19 Oct 2026)
+
+The IoTaWatt's VT calibration scales every channel. Since B and C are derived
+from the one VT on A, it scales every phase too. Its changes show as steps in
+the Voltage feed (384743):
+
+| from | VT cal | Voltage reads |
+|---|---|---:|
+| to 4 Oct 12:40 | ≈20.5 | ~241 V |
+| 4 Oct 12:40 | 21 | ~248.5 V |
+| 9 Oct 08:15–09:06, in steps | 20.5 | ~242.5 V |
+| **19 Oct ~09:40** | **20.65** | ~244 V |
+
+So 4–9 Oct logged every channel ~2.4% high, which included the first two days
+of the bill window. Once that window is split off, candidate corrections were
+fitted on 9–17 Oct and tested on 7–9 Oct, which the fit had not seen:
+
+| candidate | 9–17 Oct daily error (leave-one-day-out) | 7–9 Oct, unseen |
+|---|---:|---:|
+| none | 0.92 kWh | 0.40 kWh |
+| **global ×1.0076** (VT cal 20.65) | 0.71 | **0.08** |
+| A & B ×1.027, C ×0.984 | 0.40 | 0.86 |
+| constant +41 W | 0.40 | 0.69 |
+
+- The per-phase and constant fits work in-sample but fail on the unseen
+  window. Real phase-voltage differences would vary with each phase's load,
+  so no fixed factor would capture them.
+- The global factor is consistent across both windows (implied cal 20.64 and
+  20.66), so the VT cal was set to 20.65. History is not corrected: that would
+  have changed the bill to date by under $1.
+- The data before 4 Oct, at ≈20.5, fitted ×1.00. The right value has drifted
+  ~0.8% in a month.
+
+**Next check (about a week after 19 Oct):**
+`node scripts/fit-multipliers.mjs <csv> 2026-10-19T10:00`.
+- The `DEVICE` table rescales every period to VT_NOW, so its "Global factor"
+  line should read ≈×1.00 (cal ≈20.65).
+- The "Integrator (bill) vs AGL" lines give the bill's import/export error and
+  check the split.
+- The free fit's leave-one-day-out RMS can blow up (1311 Wh on 9–17 Oct) when
+  Light 1, ~1 W, is undetermined. Ignore it.
 
 **The bill and the month chart now use the integrator feeds** (`gridFeeds` in
 `config.ts`, `gridFlowW` in `lib/energy.ts`). Each 15-min bucket's import is

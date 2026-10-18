@@ -1,7 +1,7 @@
 // Fit a per-circuit multiplier to the retailer's half-hourly data: which scale
 // factor on each CT channel makes the monitor's net match the meter's?
 //
-//   node scripts/fit-multipliers.mjs <AGL MyUsageData csv>
+//   node scripts/fit-multipliers.mjs <AGL MyUsageData csv> [from YYYY-MM-DD[THH:MM]]
 //
 // The retailer's import − export for a half-hour is the integral of net power
 // over that slot, however the meter nets its phases, so it is linear in each
@@ -41,17 +41,26 @@ const at = (s) => Date.parse(`${s}:00+10:00`);
 // 7 Sep and the setup changed with it), so earlier data can't calibrate today's.
 const FIRST_USABLE = at("2026-09-08T00:00");
 
-// Scaling already baked into the logged values (the emoncms output formula),
-// so each feed can be normalised back to its raw ×1 reading before fitting.
-// Read off the data: the solar clipping plateau and the Water channel's
-// overnight baseline. The app's `config.calibration` mirrors this timeline.
+// Scaling already baked into the logged values, so each feed can be normalised
+// before fitting. `mult` is the emoncms output formula's per-feed factor
+// (normalised back to ×1), read off the solar clipping plateau and the Water
+// channel's overnight baseline; the app's `config.calibration` mirrors it.
+// `vt` is the IoTaWatt VT calibration in force, which scales every channel;
+// readings are rescaled to VT_NOW, so a fitted ≈1.00 means today's cal is right.
+// The VT steps show in the Voltage feed (384743).
+const VT_NOW = 20.65;
+const PHASE_C_X2 = { 384752: 2, 384754: 2, [SOLAR]: 2 };
 const DEVICE = [
-  { from: at("2026-09-08T00:00"), mult: { [SOLAR]: 2 } },               // solar on C ×2
+  { from: at("2026-09-08T00:00"), vt: 20.5, mult: { [SOLAR]: 2 } },     // solar on C ×2; VT ≈20.5 (~241 V)
   { from: at("2026-09-28T12:30"), skip: true },                         // C−A test, reconfiguring
-  { from: at("2026-09-28T13:30"), mult: { [WATER]: 2 } },               // ×2 landed on Water; solar plain C
-  { from: at("2026-10-04T10:30"), skip: true },                         // second C−A test
-  { from: at("2026-10-04T13:30"), mult: {} },                           // everything ×1
-  { from: at("2026-10-07T09:29"), mult: { 384752: 2, 384754: 2, [SOLAR]: 2 } }, // outputs ×2 phase C
+  { from: at("2026-09-28T13:30"), vt: 20.5, mult: { [WATER]: 2 } },     // ×2 landed on Water; solar plain C
+  { from: at("2026-10-04T10:30"), skip: true },                         // second C−A test; VT cal → 21 at 12:40
+  { from: at("2026-10-04T13:30"), vt: 21, mult: {} },                   // everything ×1
+  { from: at("2026-10-07T09:29"), vt: 21, mult: PHASE_C_X2 },           // outputs ×2 phase C
+  { from: at("2026-10-09T08:00"), skip: true },                         // VT cal back to 20.5 in steps, 08:15–09:06
+  { from: at("2026-10-09T09:30"), vt: 20.5, mult: PHASE_C_X2 },
+  { from: at("2026-10-19T09:30"), skip: true },                         // VT cal → 20.65 at ~09:40
+  { from: at("2026-10-19T10:00"), vt: 20.65, mult: PHASE_C_X2 },
 ];
 function deviceAt(t) {
   let cur = null;
@@ -81,17 +90,26 @@ function parseAglTime(s) {
   return Date.UTC(+m[3], +m[2] - 1, +m[1], h, +m[5]) - BRISBANE_OFFSET_MS;
 }
 const agl = new Map(); // slot start ms -> net kWh
+const aglSides = new Map(); // slot start ms -> { imp, exp } kWh
 for (const line of readFileSync(csvPath, "utf8").trim().split(/\r?\n/).slice(1)) {
   const f = line.split(",");
   const t = parseAglTime(f[6]);
-  const kwh = Number(f[8]) * (f[5] === "Generalusage" ? 1 : -1);
+  const isImport = f[5] === "Generalusage";
+  const kwh = Number(f[8]) * (isImport ? 1 : -1);
   agl.set(t, (agl.get(t) ?? 0) + kwh);
+  const s = aglSides.get(t) ?? { imp: 0, exp: 0 };
+  s[isImport ? "imp" : "exp"] += Number(f[8]);
+  aglSides.set(t, s);
 }
 const aglEnd = Math.max(...agl.keys()) + 1800e3;
 
+// The IoTaWatt integrator's grid split (from 7 Oct 09:48), which the bill uses.
+// Its formula carries the phase-C ×2, so it needs only the VT rescale.
+const IMPORTS = 546961, EXPORTS = 546962;
+
 async function fetchSeries(start, end) {
   const u = new URL(`${WORKER}/series`);
-  u.searchParams.set("ids", FEEDS.map((f) => f.id).join(","));
+  u.searchParams.set("ids", [...FEEDS.map((f) => f.id), IMPORTS, EXPORTS].join(","));
   u.searchParams.set("start", String(start));
   u.searchParams.set("end", String(end));
   u.searchParams.set("interval", "1800");
@@ -110,15 +128,21 @@ for (let s = FROM; s < aglEnd; s += 30 * 86400e3) {
     const t = byId.get(FEEDS[0].id)[i][0];
     const dev = deviceAt(t);
     if (t < s || t >= e || !agl.has(t) || !dev || dev.skip) continue;
+    const vt = VT_NOW / dev.vt;
     const kwh = {};
     let complete = true;
     for (const { id } of FEEDS) {
       const w = byId.get(id)?.[i]?.[1];
       if (w == null) { complete = false; break; }
-      kwh[id] = (w * 0.5) / 1000 / (dev.mult[id] ?? 1);
+      kwh[id] = ((w * 0.5) / 1000 / (dev.mult[id] ?? 1)) * vt;
     }
     if (complete) {
-      rows.push({ t, day: new Date(t + BRISBANE_OFFSET_MS).toISOString().slice(0, 10), net: agl.get(t), kwh });
+      const row = { t, day: new Date(t + BRISBANE_OFFSET_MS).toISOString().slice(0, 10), net: agl.get(t), kwh };
+      const inW = byId.get(IMPORTS)?.[i]?.[1], outW = byId.get(EXPORTS)?.[i]?.[1];
+      if (inW != null && outW != null) {
+        row.grid = { imp: ((inW * 0.5) / 1000) * vt, exp: ((-outW * 0.5) / 1000) * vt };
+      }
+      rows.push(row);
     }
   }
 }
@@ -218,3 +242,40 @@ for (const d of days) {
 }
 console.log(`\nLeave-one-day-out slot RMS: free fit ${wh(Math.sqrt(sseFree / rows.length))}, ` +
   `proposed fixed ${wh(Math.sqrt(sseFixed / rows.length))}`);
+
+// 4. One global factor on top of the proposed multipliers: what a VT cal change
+// does. Per-phase factors fitted better in-sample in Oct 2026 but failed on
+// unseen days; this one transferred. Scored leave-one-day-out.
+const globalK = (rs) => {
+  let num = 0, den = 0;
+  for (const r of rs) { const m = scaled(r, PROPOSED); num += m * r.net; den += m * m; }
+  return num / den;
+};
+const k = globalK(rows);
+const fullDays = days.filter((d) => rows.filter((r) => r.day === d).length === 48);
+const looErr = fullDays.map((d) => {
+  const rs = rows.filter((r) => r.day === d), kd = globalK(rows.filter((r) => r.day !== d));
+  const a = rs.reduce((s, r) => s + r.net, 0), m = rs.reduce((s, r) => s + scaled(r, PROPOSED), 0);
+  return { fixed: m - a, withK: kd * m - a };
+});
+const meanAbs = (xs) => xs.reduce((s, x) => s + Math.abs(x), 0) / xs.length;
+console.log(`\nGlobal factor on top of ${label(PROPOSED)}: ×${k.toFixed(4)} → VT cal ${(VT_NOW * k).toFixed(2)} (now ${VT_NOW})`);
+if (looErr.length) {
+  console.log(`  daily net |error| mean, leave-one-day-out: ${meanAbs(looErr.map((x) => x.fixed)).toFixed(2)} kWh as logged, ` +
+    `${meanAbs(looErr.map((x) => x.withK)).toFixed(2)} kWh with the factor (${looErr.length} full days)`);
+}
+
+// 5. The bill's feeds: the integrator's import/export against AGL's, per side.
+const gridRows = rows.filter((r) => r.grid);
+if (gridRows.length) {
+  const sum = (f) => gridRows.reduce((s, r) => s + f(r), 0);
+  const aI = sum((r) => aglSides.get(r.t).imp), aE = sum((r) => aglSides.get(r.t).exp);
+  const mI = sum((r) => r.grid.imp), mE = sum((r) => r.grid.exp);
+  const twoWay = (f) => sum((r) => 2 * Math.min(...f(r)));
+  const pct = (m, a) => `${m >= a ? "+" : ""}${((m / a - 1) * 100).toFixed(1)}%`;
+  console.log(`\nIntegrator (bill) vs AGL, ${gridRows.length} half-hours from ${gridRows[0].day}:`);
+  console.log(`  import ${mI.toFixed(1)} vs ${aI.toFixed(1)} kWh (${pct(mI, aI)}); export ${mE.toFixed(1)} vs ${aE.toFixed(1)} kWh (${pct(mE, aE)})`);
+  console.log(`  with the global factor: import ${pct(k * mI, aI)}, export ${pct(k * mE, aE)}`);
+  console.log(`  two-way volume Σ2·min(import, export): integrator ${twoWay((r) => [r.grid.imp, r.grid.exp]).toFixed(2)}, ` +
+    `AGL ${twoWay((r) => [aglSides.get(r.t).imp, aglSides.get(r.t).exp]).toFixed(2)} kWh (a match means the split is right)`);
+}
