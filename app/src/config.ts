@@ -1,7 +1,7 @@
 import type {
   FeedGroups, GridFeeds, LoadGroup, Tariff, Shares, SolarAllocation,
 } from "./lib/energy";
-import type { Calibration } from "./lib/calibration";
+import type { Calibration, UnmeteredStep } from "./lib/calibration";
 
 const feeds: FeedGroups = {
   main: [384745, 384746, 384747, 384748, 384750, 384751, 384752, 384754],
@@ -11,9 +11,10 @@ const feeds: FeedGroups = {
 
 // The IoTaWatt integrator's import/export split of the circuit net, logged
 // from 7 Oct 09:48 (the bill's data floor is later). Its formula sums the
-// circuits with the phase-C ×2 built in, so it has no `calibration` entry; if
-// a circuit's factor ever changes, change the integrator formula to match.
-// Checked against AGL in docs/metering-accuracy.md.
+// circuits with the phase-C ×2 built in, so it has no `calibration` entry.
+// `buildBuckets` instead re-bases it onto the calibrated circuits (the solar
+// trim and `unmetered` below); if a circuit's factor changes in the IoTaWatt
+// formula, change it there too. Checked against AGL in docs/metering-accuracy.md.
 const gridFeeds: GridFeeds = { imports: 546961, exports: 546962 };
 
 const feedLabels: Record<number, string> = {
@@ -45,6 +46,7 @@ const loadGroups: LoadGroup[] = [
 const brisbane = (s: string) => Date.parse(`${s}:00+10:00`);
 const always = -Infinity;
 const outputsDoubled = brisbane("2026-10-07T09:29"); // first doubled post 09:29:30
+const vtCal2065 = brisbane("2026-10-19T10:00");      // VT cal 20.65 in force (changed ~09:40)
 const calibration: Calibration = {
   384752: [{ fromMs: always, factor: 2 }, { fromMs: outputsDoubled, factor: 1 }], // Air conditioner
   384754: [{ fromMs: always, factor: 2 }, { fromMs: outputsDoubled, factor: 1 }], // Pool
@@ -54,14 +56,23 @@ const calibration: Calibration = {
     { fromMs: brisbane("2026-10-04T11:10"), factor: 1 },         // C − A test, reads true
     { fromMs: brisbane("2026-10-04T12:40"), factor: 2 },
     { fromMs: outputsDoubled, factor: 1 },
+    // The ×2 reads 2% high (fitted ×1.96, steady across 9 Oct–1 Nov). From the
+    // VT cal 20.65 change, the regime that fit describes.
+    { fromMs: vtCal2065, factor: 0.98 },
   ],
-  384751: [                                                      // Water treatment
+  384751: [                                                     // Water treatment
     // Logged doubled for this window: its baseline went 45 → 97 W while the
     // meter saw no change.
     { fromMs: brisbane("2026-09-28T13:25"), factor: 0.5 },
     { fromMs: brisbane("2026-10-04T12:40"), factor: 1 },
   ],
 };
+
+// The meter sees a steady load that no CT measures: AGL's net runs ~45 W above
+// the circuit sum (41 W fitted on 9–17 Oct, 47 W on 20 Oct–1 Nov). It is added
+// to the grid import/export and the live net, not to any circuit or house.
+// Cause unknown; from the same VT cal 20.65 change as the solar trim.
+const unmetered: UnmeteredStep[] = [{ fromMs: vtCal2065, watts: 45 }];
 
 const tariff: Tariff = {
   importCentsPerKwh: 27.83,
@@ -80,6 +91,7 @@ interface AppConfig {
   feedLabels: Record<number, string>;
   loadGroups: LoadGroup[];
   calibration: Calibration;
+  unmetered: UnmeteredStep[];
   allFeedIds: number[];
   tariff: Tariff;
   shares: Shares;
@@ -113,6 +125,7 @@ export const config = {
   feedLabels,
   loadGroups,
   calibration,
+  unmetered,
   allFeedIds: [...feeds.main, ...feeds.nicki, ...feeds.solar],
   tariff,
   shares,

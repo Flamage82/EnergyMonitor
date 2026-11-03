@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { config } from "../config";
-import { factorAt } from "../lib/calibration";
+import { factorAt, unmeteredAt } from "../lib/calibration";
 
 describe("config", () => {
   it("lists all 10 feed ids across groups with labels", () => {
@@ -43,6 +43,17 @@ describe("config", () => {
     for (const id of [384745, 384746, 384747, 384748, 384750, 545440]) {
       expect(factorAt(config.calibration, id, now)).toBe(1);
     }
+  });
+  it("trims solar's ×2 by 2% from the VT cal 20.65 change, and adds 45 W unmetered then", () => {
+    const at = (s: string) => Date.parse(`${s}:00+10:00`);
+    expect(factorAt(config.calibration, 384753, at("2026-10-19T09:59"))).toBe(1);
+    expect(factorAt(config.calibration, 384753, at("2026-10-19T10:00"))).toBe(0.98);
+    // No other circuit is trimmed.
+    for (const id of [384752, 384754, 384751, 384745, 545440]) {
+      expect(factorAt(config.calibration, id, at("2026-11-01T12:00"))).toBe(1);
+    }
+    expect(unmeteredAt(config.unmetered, at("2026-10-19T09:59"))).toBe(0);
+    expect(unmeteredAt(config.unmetered, at("2026-10-19T10:00"))).toBe(45);
   });
   it("carries the data-floor cutoff (outputs corrected 7 Oct 10:00)", () => {
     expect(config.dataStartDate).toBe("2026-10-07T10:00");

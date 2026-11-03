@@ -1,12 +1,16 @@
 # Metering accuracy — monitor vs. the retailer's meter
 
+**3 Nov 2026:** the 20.65 VT trim did not hold: the net still read 1.5 kWh/day
+under the meter. The app now adds a 45 W unmetered load and trims Solar's ×2
+to ×1.96 from 19 Oct 10:00 (see
+[3 Nov re-check](#agl-re-check-and-the-unmetered-load-3-nov-2026)).
+
 **19 Oct 2026:** the bill now splits import/export with the IoTaWatt
 integrator, which matches AGL's split (see
 [AGL re-check](#agl-re-check-and-the-bill-switch-19-oct-2026)). The net read
 ~0.9 kWh/day under the meter after 9 Oct. Partly the VT calibration, which was
 set to 20.65 at ~09:40 on 19 Oct
 ([VT changes](#vt-calibration-changes-and-the-2065-setting-19-oct-2026)).
-Re-check against AGL about a week later.
 
 **Status (7 Oct 2026):** solved in software terms. **Every phase-C channel
 reads half.** AirCon, Pool and Solar each need ×2. Phase A and Nicki (B) are
@@ -96,14 +100,8 @@ fitted on 9–17 Oct and tested on 7–9 Oct, which the fit had not seen:
 - The data before 4 Oct, at ≈20.5, fitted ×1.00. The right value has drifted
   ~0.8% in a month.
 
-**Next check (about a week after 19 Oct):**
-`node scripts/fit-multipliers.mjs <csv> 2026-10-19T10:00`.
-- The `DEVICE` table rescales every period to VT_NOW, so its "Global factor"
-  line should read ≈×1.00 (cal ≈20.65).
-- The "Integrator (bill) vs AGL" lines give the bill's import/export error and
-  check the split.
-- The free fit's leave-one-day-out RMS can blow up (1311 Wh on 9–17 Oct) when
-  Light 1, ~1 W, is undetermined. Ignore it.
+The 20.65 setting was re-checked on 3 Nov and did not hold; see
+[the next section](#agl-re-check-and-the-unmetered-load-3-nov-2026).
 
 **The bill and the month chart now use the integrator feeds** (`gridFeeds` in
 `config.ts`, `gridFlowW` in `lib/energy.ts`). Each 15-min bucket's import is
@@ -119,6 +117,74 @@ all charts use corrected watts. emoncms still stores the raw readings. The
 timeline also undoes scaling baked into the history. Solar's emoncms formula
 carried ×2 until 28 Sep 13:25, so it gets ×1 before then. Water treatment was
 logged doubled from 28 Sep 13:25 to 4 Oct 12:40, so it gets ×0.5 for that window.
+
+## AGL re-check and the unmetered load (3 Nov 2026)
+
+AGL half-hourly data (1 Oct 2025 – 2 Nov 2026), fitted from the VT change
+(`node scripts/fit-multipliers.mjs <csv> 2026-10-19T10:00`). Full days 20 Oct–1
+Nov, 13 days. **2 Nov is not usable**: AGL had published it as all zeros with
+`QualityFlag` `M`, and `fit-multipliers.mjs` does not skip such rows. Filter
+the CSV to flag `A` first; unfiltered, the fit gives garbage (global factor
+×0.887, R² 0.77).
+
+| | 9–17 Oct (baseline) | 20 Oct–1 Nov |
+|---|---:|---:|
+| daily net error, as logged | 0.68 kWh | **1.52 kWh** (all 13 days low) |
+| global factor (implied VT cal) | ×1.0003 (20.66) | ×1.0164 (20.99) |
+| bill import, monitor vs AGL | −1.0% | −2.7% (644.5 vs 662.5 kWh) |
+| bill export, monitor vs AGL | +5.8% | +8.7% (22.7 vs 20.9 kWh) |
+| two-way volume, integrator vs AGL | | 15.02 vs 14.94 kWh |
+
+The split is right, and the ×2 rule still holds (AirCon 1.983, Pool 1.981,
+Solar 1.960; phase A and Nicki ≈1.0). The net is low by 19.7 kWh over the
+13 days (−3.2%), and the shortfall has two parts:
+
+- **A steady ~50 W**, about 1.2–1.5 kWh/day: 62 W fitted alone, 47 W alongside
+  the solar term, 41 W on 9–17 Oct. Two separate windows agree. It is a load
+  the meter sees and no CT does. Cause unknown. The earlier "don't use a
+  constant" result (7–9 Oct, unseen) was at VT cal 21, whose ~1.7% high gain
+  already hid it.
+- **Solar's ×2 reads ~2% high** (fitted ×1.960 ± 0.005; ×1.959 on 9–17 Oct).
+  Worth ~5 kWh of the shortfall.
+
+Leave-one-day-out daily error: as logged 1.52 kWh; global factor alone 0.91
+(VT cal 20.99); solar trim + constant 0.58. A constant of +41 W carried over
+unchanged from 9–17 Oct gives 0.67, so the constant transferred to days it
+never saw.
+
+**Applied in the app (3 Nov, option "constant + solar trim"), from 19 Oct
+10:00**, the VT 20.65 regime the fit describes. Earlier history is not
+corrected, as with the VT steps.
+
+- `config.calibration`: Solar ×0.98 on top of the formula's ×2 (net ×1.96).
+  This reaches every chart and the live view.
+- `config.unmetered`: 45 W. `buildBuckets` takes a `BucketAdjust` and re-bases
+  the integrator's import/export onto the calibrated circuits: net moves by
+  the unmetered load plus the solar trim, and the **two-way volume is kept**.
+  The unmetered load eats into an export before it becomes import. A bucket
+  without integrator data gets the load in `gridFlowW`'s circuit netting. The
+  live "Importing/Exporting" line adds it too. It is not added to any circuit
+  or house, so the by-house and by-load charts are unchanged; the bill shares
+  the extra import between the houses in the existing main/Nicki ratio.
+- Back-test of exactly this arithmetic on the 13 days, at half-hour buckets:
+
+  | | import vs AGL | export vs AGL | daily net error |
+  |---|---:|---:|---:|
+  | as logged | −2.7% | +8.7% | 1.42 kWh, bias −1.42 |
+  | Solar ×0.98, 45 W | **−0.1%** | −3.0% | 0.52 kWh, bias 0.01 |
+
+  In-sample for the 45 W, so the next check is the real test. The IoTaWatt
+  formulas are unchanged.
+
+**Next check (AGL data from about 17 Nov):**
+`node scripts/fit-multipliers.mjs <csv> 2026-10-19T10:00` on a CSV filtered to
+quality `A`. Its figures describe the *logged* data, not the app's corrected
+numbers, so score the app's own corrections by hand: compare the bill's import
+and export with AGL's, and expect the logged-data gap of ~1.5 kWh/day to stay
+the same. If the constant drifts from 45 W (it fitted 41–47 W), say so before
+changing it. A drifting value says more than a retrim. The free fit's
+leave-one-day-out RMS can blow up when Light 1, ~1 W, is undetermined.
+Ignore it.
 
 ## Multiplier fit (7 Oct 2026)
 

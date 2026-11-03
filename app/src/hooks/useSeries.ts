@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { config } from "../config";
 import { fetchSeries } from "../api/worker";
-import { calibrateSeries } from "../lib/calibration";
-import { buildBuckets, buildFeedBuckets, type FeedBucket, type GroupBucket } from "../lib/energy";
+import { calibrateSeries, factorAt, unmeteredAt } from "../lib/calibration";
+import { buildBuckets, buildFeedBuckets, type BucketAdjust, type FeedBucket, type GroupBucket } from "../lib/energy";
 import { dayWindow, monthWindow } from "../lib/time";
 import { usePolledFetch, type AsyncState } from "./usePolledFetch";
 
@@ -10,6 +10,12 @@ const seriesIds = [...config.feeds.main, ...config.feeds.nicki, ...config.feeds.
 // The month query adds the integrator's grid split, for the bill and the daily
 // import/export bars. The day chart plots circuits only, so it skips them.
 const monthIds = [...seriesIds, config.gridFeeds.imports, config.gridFeeds.exports];
+
+// Re-bases the integrator's import/export onto the calibrated circuits.
+const bucketAdjust: BucketAdjust = {
+  unmeteredW: (tMs) => unmeteredAt(config.unmetered, tMs),
+  solarFactor: (tMs) => factorAt(config.calibration, config.feeds.solar[0], tMs),
+};
 
 // A day or month in the past is settled data — poll it daily rather than at the
 // live-view cadence so paging back doesn't spin up a fast refetch loop.
@@ -39,7 +45,7 @@ function useBucketRange(
         { ids: monthIds, startMs, endMs, intervalSeconds: bucketSeconds },
         signal,
       ), config.calibration);
-      return buildBuckets(series, config.feeds, config.gridFeeds);
+      return buildBuckets(series, config.feeds, config.gridFeeds, bucketAdjust);
     },
     intervalMs,
     [startMs, bucketSeconds],

@@ -41,6 +41,22 @@ describe("<LiveNow>", () => {
     expect(screen.getByTestId("net")).toHaveAttribute("data-state", "importing");
   });
 
+  it("counts the unmetered load in the net", () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.parse("2026-11-03T12:00:00+10:00") });
+    try {
+      // main 100 + nicki 0 − solar 120 = −20 W as metered; +45 W unmetered -> importing 25 W
+      mockLive({
+        384745: 100, 384746: 0, 384747: 0, 384748: 0, 384750: 0,
+        384751: 0, 384752: 0, 384754: 0, 384753: -120, 545440: 0,
+      });
+      render(<LiveNow />);
+      expect(screen.getByTestId("net")).toHaveAttribute("data-state", "importing");
+      expect(screen.getByTestId("net")).toHaveTextContent("Importing 25 W");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows exporting when solar exceeds load", () => {
     mockLive({
       384745: 0, 384746: 0, 384747: 0, 384748: 0, 384750: 0,

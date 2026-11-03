@@ -15,6 +15,19 @@ export function factorAt(cal: Calibration, feedId: number, tMs: number): number 
   return factor;
 }
 
+/** From `fromMs` until the next step, the grid carries `watts` of load no circuit measures. */
+export interface UnmeteredStep { fromMs: number; watts: number; }
+
+/** The unmetered load in force at `tMs`; 0 before its first step. */
+export function unmeteredAt(steps: UnmeteredStep[], tMs: number): number {
+  let watts = 0;
+  for (const step of steps) {
+    if (step.fromMs > tMs) break;
+    watts = step.watts;
+  }
+  return watts;
+}
+
 /**
  * Applies the calibration to a `/series` response, point by point, so every
  * consumer downstream (bill, by-house and by-load charts) sees corrected watts.

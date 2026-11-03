@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calibrateLive, calibrateSeries, factorAt, type Calibration } from "../lib/calibration";
+import { calibrateLive, calibrateSeries, factorAt, unmeteredAt, type Calibration } from "../lib/calibration";
 import type { MultiFeedSeries } from "../lib/energy";
 
 const cal: Calibration = {
@@ -21,6 +21,19 @@ describe("factorAt", () => {
   });
   it("applies an open-ended step to all of history", () => {
     expect(factorAt(cal, 1, 0)).toBe(2);
+  });
+});
+
+describe("unmeteredAt", () => {
+  const steps = [{ fromMs: 2000, watts: 45 }, { fromMs: 4000, watts: 0 }];
+  it("is 0 before the first step and with no steps", () => {
+    expect(unmeteredAt(steps, 1999)).toBe(0);
+    expect(unmeteredAt([], 5000)).toBe(0);
+  });
+  it("applies the latest step at or before the timestamp", () => {
+    expect(unmeteredAt(steps, 2000)).toBe(45);
+    expect(unmeteredAt(steps, 3999)).toBe(45);
+    expect(unmeteredAt(steps, 4000)).toBe(0);
   });
 });
 

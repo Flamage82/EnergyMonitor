@@ -26,7 +26,33 @@ export interface GroupBucket {
   // From the integrator, both >= 0; unset where either feed has no value.
   importW?: number;
   exportW?: number;
+  // Load the grid supplies that no circuit measures, when `buildBuckets` was
+  // given an adjustment. Already folded into `importW`/`exportW`; `gridFlowW`
+  // adds it when it has to net the circuits itself.
+  unmeteredW?: number;
   partial: boolean;
+}
+
+/**
+ * Corrections to the grid flow that the circuit calibration alone can't make,
+ * because the integrator feeds were summed on the IoTaWatt from the logged
+ * circuits.
+ */
+export interface BucketAdjust {
+  /** Watts the grid supplies beyond what the circuits measure, at `tMs`. */
+  unmeteredW(tMs: number): number;
+  /** The factor the solar feed was calibrated by at `tMs`; 1 means none. */
+  solarFactor(tMs: number): number;
+}
+
+/**
+ * Moves a bucket's net grid flow by `shiftW` (positive = more import), keeping
+ * its two-way volume: the energy that netted to nothing inside the bucket.
+ */
+function shiftFlow(importW: number, exportW: number, shiftW: number): { importW: number; exportW: number } {
+  const twoWayW = Math.min(importW, exportW);
+  const netW = importW - exportW + shiftW;
+  return { importW: Math.max(netW, 0) + twoWayW, exportW: Math.max(-netW, 0) + twoWayW };
 }
 
 export interface FeedBucket {
@@ -118,8 +144,17 @@ export function buildFeedBuckets(series: MultiFeedSeries, feedIds: number[]): Fe
  * With `grid`, each bucket also carries the integrator's `importW`/`exportW`.
  * A null in either grid feed leaves both unset (the bill then falls back to
  * netting the circuits) and is not a gap: the circuits still give a figure.
+ *
+ * With `adjust`, the integrator's flow is re-based onto the calibrated circuits:
+ * it moves by the solar trim (the integrator holds solar as logged, `solarW` is
+ * calibrated) plus the unmetered load.
  */
-export function buildBuckets(series: MultiFeedSeries, groups: FeedGroups, grid?: GridFeeds): GroupBucket[] {
+export function buildBuckets(
+  series: MultiFeedSeries,
+  groups: FeedGroups,
+  grid?: GridFeeds,
+  adjust?: BucketAdjust,
+): GroupBucket[] {
   const all = [...groups.main, ...groups.nicki, ...groups.solar];
   const sum = (watts: Record<number, number>, ids: number[]) =>
     ids.reduce((a, id) => a + (watts[id] ?? 0), 0);
@@ -138,10 +173,17 @@ export function buildBuckets(series: MultiFeedSeries, groups: FeedGroups, grid?:
       solarW: -sum(b.watts, groups.solar) || 0,
       partial: b.partial,
     };
+    const unmeteredW = adjust?.unmeteredW(b.tMs) ?? 0;
+    if (adjust) bucket.unmeteredW = unmeteredW;
     const inW = imports?.[i]?.[1], outW = exports?.[i]?.[1];
     if (inW != null && outW != null) {
-      bucket.importW = inW;
-      bucket.exportW = -outW || 0;
+      if (adjust) {
+        const loggedSolarW = bucket.solarW / adjust.solarFactor(b.tMs);
+        Object.assign(bucket, shiftFlow(inW, -outW || 0, unmeteredW + loggedSolarW - bucket.solarW));
+      } else {
+        bucket.importW = inW;
+        bucket.exportW = -outW || 0;
+      }
     }
     return bucket;
   });
@@ -155,7 +197,7 @@ export function buildBuckets(series: MultiFeedSeries, groups: FeedGroups, grid?:
  */
 export function gridFlowW(b: GroupBucket): { importW: number; exportW: number } {
   if (b.importW != null && b.exportW != null) return { importW: b.importW, exportW: b.exportW };
-  const netW = b.mainW + b.nickiW - b.solarW;
+  const netW = b.mainW + b.nickiW - b.solarW + (b.unmeteredW ?? 0);
   return netW >= 0 ? { importW: netW, exportW: 0 } : { importW: 0, exportW: -netW };
 }
 

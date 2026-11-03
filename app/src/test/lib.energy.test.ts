@@ -133,9 +133,63 @@ describe("buildBuckets grid feeds", () => {
   });
 });
 
+describe("buildBuckets adjust", () => {
+  const grid = { imports: 21, exports: 22 };
+  const series = (inW: number | null, outW: number | null): MultiFeedSeries => [
+    { feedid: "1", data: [[0, 100]] },
+    { feedid: "2", data: [[0, 0]] },
+    { feedid: "9", data: [[0, 10]] },
+    { feedid: "5", data: [[0, -98]] }, // calibrated solar: 98 W generating
+    { feedid: "21", data: [[0, inW]] },
+    { feedid: "22", data: [[0, outW]] },
+  ];
+  const adjust = (unmeteredW: number, solarFactor = 1) => ({ unmeteredW: () => unmeteredW, solarFactor: () => solarFactor });
+
+  it("shifts the integrator's net by the unmetered load, importing more", () => {
+    const [b] = buildBuckets(series(300, -0), groups, grid, adjust(45));
+    expect(b).toMatchObject({ importW: 345, exportW: 0, unmeteredW: 45 });
+  });
+
+  it("lets the unmetered load eat into an export first", () => {
+    const [b] = buildBuckets(series(0, -200), groups, grid, adjust(45));
+    expect(b).toMatchObject({ importW: 0, exportW: 155 });
+    const [c] = buildBuckets(series(0, -30), groups, grid, adjust(45));
+    expect(c).toMatchObject({ importW: 15, exportW: 0 });
+  });
+
+  it("keeps the two-way volume the bucket netted internally", () => {
+    // 300 W in, 100 W out: net +200, two-way 100. Shifting by +45 only moves the net.
+    const [b] = buildBuckets(series(300, -100), groups, grid, adjust(45));
+    expect(b).toMatchObject({ importW: 345, exportW: 100 });
+  });
+
+  it("re-bases the integrator's logged solar onto the calibrated solar", () => {
+    // Calibrated solar 98 W at factor 0.98 means the integrator saw 100 W: net is 2 W higher.
+    const [b] = buildBuckets(series(300, -0), groups, grid, adjust(0, 0.98));
+    expect(b.importW).toBeCloseTo(302);
+  });
+
+  it("changes nothing at zero shift", () => {
+    const [b] = buildBuckets(series(300, -100), groups, grid, adjust(0));
+    expect(b).toMatchObject({ importW: 300, exportW: 100 });
+  });
+
+  it("carries the unmetered load for the circuit-net fallback when the integrator has no value", () => {
+    const [b] = buildBuckets(series(null, null), groups, grid, adjust(45));
+    expect(b.importW).toBeUndefined();
+    expect(b.unmeteredW).toBe(45);
+    expect(gridFlowW(b)).toEqual({ importW: 100 + 10 - 98 + 45, exportW: 0 });
+  });
+});
+
 describe("gridFlowW", () => {
   const bucket = (over: Partial<GroupBucket>): GroupBucket =>
     ({ tMs: 0, mainW: 1000, nickiW: 0, solarW: 1500, partial: false, ...over });
+
+  it("adds the unmetered load when it nets the circuits itself", () => {
+    expect(gridFlowW(bucket({ solarW: 400, unmeteredW: 45 }))).toEqual({ importW: 645, exportW: 0 });
+    expect(gridFlowW(bucket({ unmeteredW: 45 }))).toEqual({ importW: 0, exportW: 455 });
+  });
 
   it("uses the integrator's split when the bucket has it", () => {
     expect(gridFlowW(bucket({ importW: 120, exportW: 620 }))).toEqual({ importW: 120, exportW: 620 });

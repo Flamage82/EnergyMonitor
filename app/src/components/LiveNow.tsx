@@ -1,5 +1,6 @@
 import { config } from "../config";
 import { useLiveFeeds } from "../hooks/useLiveFeeds";
+import { unmeteredAt } from "../lib/calibration";
 import { Section } from "./Section";
 
 const sum = (v: Record<number, number>, ids: number[]) => ids.reduce((a, id) => a + (v[id] ?? 0), 0);
@@ -11,8 +12,9 @@ export function LiveNow() {
   const main = sum(v, config.feeds.main);
   const nicki = sum(v, config.feeds.nicki);
   const solarGen = -sum(v, config.feeds.solar);
-  const net = main + nicki - solarGen;
-  const stale = lastUpdated != null && Date.now() - lastUpdated > 120_000;
+  const now = Date.now();
+  const net = main + nicki - solarGen + unmeteredAt(config.unmetered, now);
+  const stale = lastUpdated != null && now - lastUpdated > 120_000;
 
   return (
     <Section title="Right now" error={error}>
