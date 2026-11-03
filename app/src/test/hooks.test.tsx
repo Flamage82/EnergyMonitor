@@ -41,6 +41,41 @@ describe("usePolledFetch", () => {
     expect(result.current.error).toMatch(/boom/);
     expect(result.current.data).toBe("ok");
   });
+
+  it("drops the previous deps' data at once when the deps change", async () => {
+    const loader = vi.fn(async () => `month ${loader.mock.calls.length}`);
+    const { result, rerender } = renderHook(
+      ({ offset }) => usePolledFetch(loader, 1000, [offset]),
+      { initialProps: { offset: 0 } },
+    );
+    await flush();
+    expect(result.current.data).toBe("month 1");
+
+    // On the very render that carries the new deps — before its fetch resolves —
+    // the old deps' data must not be handed back.
+    rerender({ offset: -1 });
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(true);
+    expect(result.current.lastUpdated).toBeNull();
+
+    await flush();
+    expect(result.current.data).toBe("month 2");
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("keeps showing the current data while a poll for the same deps refetches", async () => {
+    let resolveSecond!: (v: string) => void;
+    const loader = vi.fn()
+      .mockResolvedValueOnce("first")
+      .mockImplementationOnce(() => new Promise<string>((r) => { resolveSecond = r; }));
+    const { result } = renderHook(() => usePolledFetch(loader, 1000, [0]));
+    await flush();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(result.current.loading).toBe(true);
+    expect(result.current.data).toBe("first");
+    await act(async () => { resolveSecond("second"); });
+    expect(result.current.data).toBe("second");
+  });
 });
 
 describe("useLiveFeeds", () => {

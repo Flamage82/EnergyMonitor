@@ -297,3 +297,21 @@ body {
 .bill-card .total dt {
   color: var(--text);
 }
+
+.skeleton {
+  display: inline-block;
+  width: 4.5rem;
+  height: 0.8em;
+  border-radius: 4px;
+  vertical-align: middle;
+  background: var(--border);
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}

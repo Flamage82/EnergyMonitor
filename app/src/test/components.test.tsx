@@ -242,6 +242,22 @@ describe("<BillSummary>", () => {
     expect(screen.getByRole("heading", { name: /Bill/ })).toHaveTextContent("Bill so far — November 2026");
   });
 
+  it("shows a skeleton, not a zero bill, while the month is loading", () => {
+    vi.spyOn(seriesHook, "useMonthData").mockReturnValue({
+      data: null, error: null, loading: true, lastUpdated: null,
+    });
+    render(<BillSummary now={now} />);
+    for (const id of ["bill-main", "bill-nicki"]) {
+      const card = screen.getByTestId(id);
+      expect(card).toHaveAttribute("aria-busy", "true");
+      expect(card.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
+      expect(card).not.toHaveTextContent("$");
+      expect(card).not.toHaveTextContent("kWh");
+    }
+    // The month being loaded is still named, so the stepper stays legible.
+    expect(screen.getByRole("heading", { name: /Bill/ })).toHaveTextContent("October 2026");
+  });
+
   it("charges a past month's supply for its full length", () => {
     // Full November (30 days) at the configured supply rate, no usage data.
     const dec = new Date("2026-12-03T05:00:00Z");

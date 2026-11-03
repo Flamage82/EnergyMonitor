@@ -18,18 +18,23 @@ function excludedDaysNote(dataStartDate: string, timeZone: string): string {
   return `Excludes usage before ${label} (before monitoring was corrected).`;
 }
 
+// Stands in for a figure until its month has loaded; the labels stay put so the
+// card doesn't change shape when the numbers arrive.
+const Skeleton = () => <span className="skeleton" aria-hidden="true" />;
+
 function Card({ testId, name, bill, totalLabel }: {
-  testId: string; name: string; bill: HouseholdBill; totalLabel: string;
+  testId: string; name: string; bill: HouseholdBill | null; totalLabel: string;
 }) {
+  const value = (render: (b: HouseholdBill) => string) => (bill ? render(bill) : <Skeleton />);
   return (
-    <div className="bill-card" data-testid={testId}>
+    <div className="bill-card" data-testid={testId} aria-busy={bill === null}>
       <h3>{name}</h3>
       <dl>
-        <div><dt>Imported</dt><dd>{bill.importKwh.toFixed(1)} kWh</dd></div>
-        <div><dt>Usage cost</dt><dd>{money(bill.importCost)}</dd></div>
-        <div><dt>Solar credit</dt><dd>{money(bill.solarCreditShare)}</dd></div>
-        <div><dt>Supply charge</dt><dd>{money(bill.supplyChargeShare)}</dd></div>
-        <div className="total"><dt>{totalLabel}</dt><dd>{money(bill.total)}</dd></div>
+        <div><dt>Imported</dt><dd>{value((b) => `${b.importKwh.toFixed(1)} kWh`)}</dd></div>
+        <div><dt>Usage cost</dt><dd>{value((b) => money(b.importCost))}</dd></div>
+        <div><dt>Solar credit</dt><dd>{value((b) => money(b.solarCreditShare))}</dd></div>
+        <div><dt>Supply charge</dt><dd>{value((b) => money(b.supplyChargeShare))}</dd></div>
+        <div className="total"><dt>{totalLabel}</dt><dd>{value((b) => money(b.total))}</dd></div>
       </dl>
     </div>
   );
@@ -44,8 +49,10 @@ export function BillSummary({ now }: { now: Date }) {
   const { monthStart, floored, daysElapsed, isCurrent, atFloor } =
     monthWindow(now, config.timezone, config.dataStartDate, monthOffset);
 
-  const bill = allocateBill(data ?? [], {
-    bucketSeconds: inferBucketSeconds(data ?? [], config.monthBucketSeconds),
+  // No data yet (first load, or just paged to another month) means no bill — not
+  // a zero-usage one, which would show a supply-charge-only total as if it were real.
+  const bill = data && allocateBill(data, {
+    bucketSeconds: inferBucketSeconds(data, config.monthBucketSeconds),
     tariff: config.tariff,
     shares: config.shares,
     solarAllocation: config.solarAllocation,
@@ -65,13 +72,13 @@ export function BillSummary({ now }: { now: Date }) {
         </div>
       </div>
       <div className="bill-cards">
-        <Card testId="bill-main" name="Main house" bill={bill.mainHouse} totalLabel={totalLabel} />
-        <Card testId="bill-nicki" name="Nicki" bill={bill.nicki} totalLabel={totalLabel} />
+        <Card testId="bill-main" name="Main house" bill={bill?.mainHouse ?? null} totalLabel={totalLabel} />
+        <Card testId="bill-nicki" name="Nicki" bill={bill?.nicki ?? null} totalLabel={totalLabel} />
       </div>
       <p className="note">
         Estimate only — excludes unmonitored loads.
         {floored ? ` ${excludedDaysNote(config.dataStartDate, config.timezone)}` : ""}
-        {bill.gaps > 0 ? ` ${bill.gaps} data ${bill.gaps === 1 ? "gap" : "gaps"}.` : ""}
+        {bill && bill.gaps > 0 ? ` ${bill.gaps} data ${bill.gaps === 1 ? "gap" : "gaps"}.` : ""}
         {" "}Rates: {config.tariff.importCentsPerKwh}c/kWh import,
         {" "}{config.tariff.supplyChargeCentsPerDay}c/day supply, {config.tariff.feedInCentsPerKwh}c/kWh feed-in.
         Supply charge &amp; solar income split {config.shares.mainHouse}:{config.shares.nicki}.
