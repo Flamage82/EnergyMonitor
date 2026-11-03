@@ -210,6 +210,26 @@ export interface HouseholdBill {
 }
 export interface BillResult { mainHouse: HouseholdBill; nicki: HouseholdBill; gaps: number; }
 
+export interface ActualBillSplit { mainHouse: number; nicki: number; mainShare: number; }
+
+/**
+ * Re-splits a real bill by the ratio of the sensor-based estimate: each
+ * household pays its estimated total's share of the actual amount. Null when
+ * there is no meaningful ratio (nothing estimated, or a negative total from
+ * solar credit outweighing usage).
+ */
+export function splitActualBill(estimate: BillResult, actualDollars: number): ActualBillSplit | null {
+  const { total: main } = estimate.mainHouse;
+  const { total: nicki } = estimate.nicki;
+  if (main < 0 || nicki < 0 || main + nicki <= 0) return null;
+  const mainShare = main / (main + nicki);
+  // Round the main house, then take Nicki as the remainder so the two cent
+  // figures always add back to exactly the typed bill.
+  const mainHouse = Math.round(actualDollars * mainShare * 100) / 100;
+  const nickiDollars = Math.round((actualDollars - mainHouse) * 100) / 100;
+  return { mainHouse, nicki: nickiDollars, mainShare };
+}
+
 export interface AllocateOpts {
   bucketSeconds: number;
   tariff: Tariff;

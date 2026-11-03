@@ -258,6 +258,33 @@ describe("<BillSummary>", () => {
     expect(screen.getByRole("heading", { name: /Bill/ })).toHaveTextContent("October 2026");
   });
 
+  it("splits a typed-in actual bill by the sensor ratio", () => {
+    mockMonth();
+    render(<BillSummary now={now} />);
+    expect(screen.queryByTestId("actual-split")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Actual bill/), { target: { value: "200" } });
+    const split = screen.getByTestId("actual-split");
+    const dollars = [...(split.textContent ?? "").matchAll(/\$(\d+\.\d\d)/g)].map((m) => Number(m[1]));
+    expect(dollars).toHaveLength(2);
+    expect(dollars[0] + dollars[1]).toBeCloseTo(200, 2);
+    expect(split).toHaveTextContent("Main house");
+    expect(split).toHaveTextContent("Nicki");
+  });
+
+  it("clears the typed bill when paging to another month", () => {
+    const nov = new Date("2026-11-03T05:00:00Z");
+    mockMonth();
+    render(<BillSummary now={nov} />);
+    const input = screen.getByLabelText(/Actual bill/) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "150" } });
+    expect(screen.getByTestId("actual-split")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(input.value).toBe("");
+    expect(screen.queryByTestId("actual-split")).not.toBeInTheDocument();
+  });
+
   it("charges a past month's supply for its full length", () => {
     // Full November (30 days) at the configured supply rate, no usage data.
     const dec = new Date("2026-12-03T05:00:00Z");

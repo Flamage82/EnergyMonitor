@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { config } from "../config";
 import { useMonthData } from "../hooks/useSeries";
-import { allocateBill, inferBucketSeconds, type HouseholdBill } from "../lib/energy";
+import { allocateBill, inferBucketSeconds, splitActualBill, type HouseholdBill } from "../lib/energy";
 import { localDateStartMs, monthLabel, monthWindow } from "../lib/time";
 import { Section } from "./Section";
 
@@ -44,6 +44,9 @@ export function BillSummary({ now }: { now: Date }) {
   // 0 = the current month-to-date; each step back is one whole calendar month.
   // Not persisted — a reload lands back on the live edge.
   const [monthOffset, setMonthOffset] = useState(0);
+  // The real bill as typed; a string so partial input ("12.") isn't mangled.
+  // Belongs to one month, so paging clears it.
+  const [actualInput, setActualInput] = useState("");
   const { data, error } = useMonthData(now, monthOffset);
 
   const { monthStart, floored, daysElapsed, isCurrent, atFloor } =
@@ -61,7 +64,14 @@ export function BillSummary({ now }: { now: Date }) {
 
   const label = monthLabel(new Date(monthStart), config.timezone);
   const totalLabel = isCurrent ? "Running total" : "Total";
-  const step = (delta: -1 | 1) => setMonthOffset((o) => Math.min(0, o + delta));
+  const step = (delta: -1 | 1) => {
+    setMonthOffset((o) => Math.min(0, o + delta));
+    setActualInput("");
+  };
+
+  const actual = actualInput.trim() === "" ? NaN : Number(actualInput);
+  const hasActual = Number.isFinite(actual) && actual >= 0;
+  const split = bill && hasActual ? splitActualBill(bill, actual) : null;
 
   return (
     <Section title={isCurrent ? `Bill so far — ${label}` : `Bill — ${label}`} error={error}>
@@ -74,6 +84,26 @@ export function BillSummary({ now }: { now: Date }) {
       <div className="bill-cards">
         <Card testId="bill-main" name="Main house" bill={bill?.mainHouse ?? null} totalLabel={totalLabel} />
         <Card testId="bill-nicki" name="Nicki" bill={bill?.nicki ?? null} totalLabel={totalLabel} />
+      </div>
+      <div className="actual-bill">
+        <label>
+          <span className="label">Actual bill</span>
+          <span className="money-input">
+            $<input
+              type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00"
+              value={actualInput} onChange={(e) => setActualInput(e.target.value)}
+            />
+          </span>
+        </label>
+        {split && (
+          <dl data-testid="actual-split">
+            <div><dt>Main house ({Math.round(split.mainShare * 100)}%)</dt><dd>{money(split.mainHouse)}</dd></div>
+            <div><dt>Nicki ({Math.round((1 - split.mainShare) * 100)}%)</dt><dd>{money(split.nicki)}</dd></div>
+          </dl>
+        )}
+        {bill && hasActual && !split && (
+          <p className="note">No usage ratio to scale from for this month.</p>
+        )}
       </div>
       <p className="note">
         Estimate only — excludes unmonitored loads.

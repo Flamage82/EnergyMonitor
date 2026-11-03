@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { allocateBill, buildBuckets, buildFeedBuckets, gridFlowW, inferBucketSeconds, integrateKwh, type MultiFeedSeries, type FeedGroups, type GroupBucket } from "../lib/energy";
+import { allocateBill, splitActualBill, buildBuckets, buildFeedBuckets, gridFlowW, inferBucketSeconds, integrateKwh, type MultiFeedSeries, type FeedGroups, type GroupBucket } from "../lib/energy";
 
 const groups: FeedGroups = { main: [1, 2], nicki: [9], solar: [5] };
 
@@ -403,5 +403,37 @@ describe("allocateBill - supply charge and gaps", () => {
       { tMs: 1, mainW: 100, nickiW: 0, solarW: 0, partial: false },
     ];
     expect(allocateBill(b, { ...base, solarAllocation: "proportional" }).gaps).toBe(1);
+  });
+});
+
+describe("splitActualBill", () => {
+  const house = (total: number) => ({
+    importKwh: 0, importCost: 0, solarCreditShare: 0, supplyChargeShare: 0, total,
+  });
+  const estimate = (main: number, nicki: number) => ({
+    mainHouse: house(main), nicki: house(nicki), gaps: 0,
+  });
+
+  it("scales the sensor ratio up to the real bill", () => {
+    // 60:20 estimated = 75% / 25% of a real $200 bill
+    expect(splitActualBill(estimate(60, 20), 200)).toEqual({ mainHouse: 150, nicki: 50, mainShare: 0.75 });
+  });
+
+  it("rounds to cents and still adds back to the real bill", () => {
+    const split = splitActualBill(estimate(1, 2), 100);
+    expect(split).toMatchObject({ mainHouse: 33.33, nicki: 66.67 });
+    expect(split!.mainHouse + split!.nicki).toBeCloseTo(100, 10);
+  });
+
+  it("has no ratio when the estimate sums to zero", () => {
+    expect(splitActualBill(estimate(0, 0), 100)).toBeNull();
+  });
+
+  it("has no ratio when a household's estimate is negative", () => {
+    expect(splitActualBill(estimate(-5, 20), 100)).toBeNull();
+  });
+
+  it("gives a household with a zero estimate nothing", () => {
+    expect(splitActualBill(estimate(40, 0), 80)).toEqual({ mainHouse: 80, nicki: 0, mainShare: 1 });
   });
 });
