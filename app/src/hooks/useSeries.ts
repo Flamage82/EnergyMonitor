@@ -3,6 +3,7 @@ import { config } from "../config";
 import { fetchSeries } from "../api/worker";
 import { calibrateSeries, factorAt, unmeteredAt } from "../lib/calibration";
 import { buildBuckets, buildFeedBuckets, type BucketAdjust, type FeedBucket, type GroupBucket } from "../lib/energy";
+import { applyOctober2026Patch } from "../lib/onceOffOct2026"; // ONCE-OFF(oct-2026)
 import { dayWindow, monthWindow } from "../lib/time";
 import { usePolledFetch, type AsyncState } from "./usePolledFetch";
 
@@ -45,7 +46,8 @@ function useBucketRange(
         { ids: monthIds, startMs, endMs, intervalSeconds: bucketSeconds },
         signal,
       ), config.calibration);
-      return buildBuckets(series, config.feeds, config.gridFeeds, bucketAdjust);
+      // ONCE-OFF(oct-2026): remove with lib/onceOffOct2026.ts
+      return applyOctober2026Patch(buildBuckets(series, config.feeds, config.gridFeeds, bucketAdjust));
     },
     intervalMs,
     [startMs, bucketSeconds],

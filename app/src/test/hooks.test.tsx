@@ -85,8 +85,8 @@ describe("useMonthData", () => {
     const now = new Date("2026-10-08T05:00:00Z");
     const { result } = renderHook(() => useMonthData(now));
     await waitFor(() => expect(result.current.data).not.toBeNull());
-    // month start (Oct 1) is before the data floor (Oct 7 10:00), so the floor wins
-    expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-10-07T00:00:00Z"));
+    // the data floor (1 Oct) is the month start, so the query starts at 1 Oct 00:00 Brisbane
+    expect(spy.mock.calls[0][1].startMs).toBe(Date.parse("2026-09-30T14:00:00Z"));
     // The whole-month query uses the coarser bucket so the payload stays ~1 MB.
     expect(spy.mock.calls[0][1].intervalSeconds).toBe(900);
     const bucket = result.current.data![0];

@@ -68,7 +68,7 @@ describe("<LiveNow>", () => {
 });
 
 describe("<EnergyChart>", () => {
-  // 2026-10-08 15:00 Brisbane; the configured data floor is 2026-10-07 10:00.
+  // 2026-10-08 15:00 Brisbane; the configured data floor is 2026-10-01.
   const now = new Date("2026-10-08T05:00:00Z");
 
   const mockData = () => {
@@ -131,7 +131,10 @@ describe("<EnergyChart>", () => {
     fireEvent.click(screen.getByRole("button", { name: "Previous" }));
     expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent(/Wed.*7.*Oct/);
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
-    // Oct 7 holds the configured floor — no earlier day to page to.
+    expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
+    // Six more days back is 1 Oct, which holds the configured floor.
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByRole("heading", { name: /Usage/ })).toHaveTextContent(/Thu.*1.*Oct/);
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
   });
 
@@ -155,7 +158,7 @@ describe("<EnergyChart>", () => {
 });
 
 describe("<BillSummary>", () => {
-  // `now` is 15 Oct; the configured data floor is 7 Oct 10:00, so September is
+  // `now` is 15 Oct; the configured data floor is 1 Oct, so September is
   // before monitoring and October is the earliest month worth paging to.
   const now = new Date("2026-10-15T05:00:00Z");
   const buckets: GroupBucket[] = [
@@ -177,11 +180,25 @@ describe("<BillSummary>", () => {
   });
 
   it("notes the excluded pre-monitoring days when the data floor is in effect", () => {
+    // The configured floor is the month start, so set a mid-month one for this test.
+    const cfg = config as { dataStartDate: string };
+    const original = cfg.dataStartDate;
+    cfg.dataStartDate = "2026-10-07T10:00";
+    try {
+      mockMonth();
+      render(<BillSummary now={now} />);
+      expect(
+        screen.getByText(/Excludes usage before 7 Oct, 10:00\s?am \(before monitoring was corrected\)\./),
+      ).toBeInTheDocument();
+    } finally {
+      cfg.dataStartDate = original;
+    }
+  });
+
+  it("has no exclusion note when the whole month has data", () => {
     mockMonth();
     render(<BillSummary now={now} />);
-    expect(
-      screen.getByText(/Excludes usage before 7 Oct, 10:00\s?am \(before monitoring was corrected\)\./),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/Excludes usage before/)).not.toBeInTheDocument();
   });
 
   it("reports data gaps from partial buckets", () => {

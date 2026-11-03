@@ -186,6 +186,37 @@ changing it. A drifting value says more than a retrim. The free fit's
 leave-one-day-out RMS can blow up when Light 1, ~1 W, is undetermined.
 Ignore it.
 
+## 1–7 Oct patch for October's bill (3 Nov 2026) — ONCE-OFF(oct-2026)
+
+The bill's data floor was 7 Oct 10:00, so October's bill missed its first
+week. `dataStartDate` is now 1 Oct and `lib/onceOffOct2026.ts` patches 1 Oct
+00:00 – 7 Oct 10:00 toward AGL's reads. The existing calibration is already
+close there (net energy within ~2 kWh over 6.4 days), so the 45 W and the
+Solar trim are **not** extended back. What is wrong is the import/export
+split: no integrator feeds exist before 7 Oct 09:48, so the bill nets the
+circuits per 15-min bucket and loses the energy that flowed both ways inside a
+bucket. Each window scales import and export to AGL's half-hourly totals:
+
+| window (VT cal) | import ×| export × | before the patch (import / export vs AGL) |
+|---|---:|---:|---|
+| 1 Oct – 4 Oct 10:30 (20.5) | 1.030 | 1.083 | −2.9% / −7.6% |
+| 4 Oct 10:30–13:30 (C−A test) | 1 | 2.23 | +2.1% / −55.3% |
+| 4 Oct 13:30 – 7 Oct 10:00 (21) | 1.005 | 1.106 | −0.5% / −9.7% |
+
+Whole of October through the real pipeline (month buckets, integrator,
+calibration, patch) against AGL: import 1403.0 vs 1410.6 kWh (−0.5%), export
+93.1 vs 92.9 (+0.3%). Bill $427.04 against $428.99 computed from AGL's kWh at
+the configured tariff. All of the remaining import gap is 7–19 Oct (−1.3%),
+the VT-cal-20.5 period whose history was left uncorrected.
+
+**To remove it**, grep the repo for `ONCE-OFF(oct-2026)`:
+1. delete `app/src/lib/onceOffOct2026.ts` and `app/src/test/lib.onceOffOct2026.test.ts`;
+2. delete the import and the `applyOctober2026Patch(...)` wrapper in `app/src/hooks/useSeries.ts`;
+3. set `dataStartDate` in `app/src/config.ts` to the first day you still want
+   (it has no effect once the month start is later) and update the tests that
+   name 1 Oct as the floor (`config`, `hooks`, `components`);
+4. delete this section.
+
 ## Multiplier fit (7 Oct 2026)
 
 `node scripts/fit-multipliers.mjs <AGL MyUsageData csv> [from]` regresses AGL's

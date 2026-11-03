@@ -10,7 +10,7 @@ const feeds: FeedGroups = {
 };
 
 // The IoTaWatt integrator's import/export split of the circuit net, logged
-// from 7 Oct 09:48 (the bill's data floor is later). Its formula sums the
+// from 7 Oct 09:48 (earlier buckets net the circuits). Its formula sums the
 // circuits with the phase-C ×2 built in, so it has no `calibration` entry.
 // `buildBuckets` instead re-bases it onto the calibrated circuits (the solar
 // trim and `unmetered` below); if a circuit's factor changes in the IoTaWatt
@@ -112,14 +112,17 @@ export const config = {
   // site's requests to whoever happens to own an example domain.
   workerBaseUrl: (import.meta.env.VITE_WORKER_URL as string | undefined) || "",
   timezone: "Australia/Brisbane",
-  // The IoTaWatt outputs were corrected at this local time ("YYYY-MM-DD", with an
-  // optional "THH:mm", Australia/Brisbane). Data before it is ignored for the
+  // The first usable day ("YYYY-MM-DD", with an optional "THH:mm",
+  // Australia/Brisbane). Until 7 Oct 10:00 it was the moment the IoTaWatt
+  // outputs were corrected; it is now 1 Oct, with 1–7 Oct patched toward AGL's
+  // reads by lib/onceOffOct2026.ts (ONCE-OFF(oct-2026): when that file goes,
+  // so does the need for this value to be 1 Oct). Data before it is ignored for the
   // month-to-date bill and the "this month" chart, and the day chart pages back
   // no further than this day. Once the billing month starts after this date the
   // `Math.max` in `effectiveMonthWindow` always picks the month start, so the key
   // stops having any effect — but removing it still means editing `lib/time.ts`
   // (and its callers), so leave it.
-  dataStartDate: "2026-10-07T10:00",
+  dataStartDate: "2026-10-01", // ONCE-OFF(oct-2026)
   feeds,
   gridFeeds,
   feedLabels,

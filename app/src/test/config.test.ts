@@ -55,8 +55,8 @@ describe("config", () => {
     expect(unmeteredAt(config.unmetered, at("2026-10-19T09:59"))).toBe(0);
     expect(unmeteredAt(config.unmetered, at("2026-10-19T10:00"))).toBe(45);
   });
-  it("carries the data-floor cutoff (outputs corrected 7 Oct 10:00)", () => {
-    expect(config.dataStartDate).toBe("2026-10-07T10:00");
+  it("carries the data-floor cutoff (1 Oct, patched toward AGL until the once-off goes)", () => {
+    expect(config.dataStartDate).toBe("2026-10-01");
   });
   it("uses a coarser bucket for the whole-month query", () => {
     expect(config.bucketSeconds).toBe(300);
