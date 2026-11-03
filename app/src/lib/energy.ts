@@ -1,4 +1,10 @@
-export interface FeedGroups { main: number[]; nicki: number[]; solar: number[]; }
+export interface FeedGroups {
+  main: number[];
+  nicki: number[];
+  solar: number[];
+  /** Circuits both houses use; their load is apportioned by `shares`. */
+  shared?: { ids: number[]; shares: Shares };
+}
 /** A named series in the "by load" chart — one or more feed ids summed together. */
 export interface LoadGroup { label: string; ids: number[]; }
 export interface Tariff {
@@ -59,6 +65,16 @@ export interface FeedBucket {
   tMs: number;
   watts: Record<number, number>; // per feed id, raw sign (solar negative when generating)
   partial: boolean;
+}
+
+/**
+ * Splits a shared circuit's load between the houses by `shares`. A misconfigured
+ * `{ 0, 0 }` leaves it all with the main house rather than dropping the load.
+ */
+export function apportionShared(watts: number, shares: Shares): { mainW: number; nickiW: number } {
+  const total = shares.mainHouse + shares.nicki;
+  if (total <= 0) return { mainW: watts, nickiW: 0 };
+  return { mainW: (watts * shares.mainHouse) / total, nickiW: (watts * shares.nicki) / total };
 }
 
 export function integrateKwh(watts: number, bucketSeconds: number): number {
@@ -155,7 +171,8 @@ export function buildBuckets(
   grid?: GridFeeds,
   adjust?: BucketAdjust,
 ): GroupBucket[] {
-  const all = [...groups.main, ...groups.nicki, ...groups.solar];
+  const sharedIds = groups.shared?.ids ?? [];
+  const all = [...groups.main, ...sharedIds, ...groups.nicki, ...groups.solar];
   const sum = (watts: Record<number, number>, ids: number[]) =>
     ids.reduce((a, id) => a + (watts[id] ?? 0), 0);
   const byId = new Map(series.map((s) => [Number(s.feedid), s.data]));
@@ -163,10 +180,13 @@ export function buildBuckets(
   const exports = grid && byId.get(grid.exports);
 
   return buildFeedBuckets(series, all).map((b, i) => {
+    const shared = groups.shared
+      ? apportionShared(sum(b.watts, sharedIds), groups.shared.shares)
+      : { mainW: 0, nickiW: 0 };
     const bucket: GroupBucket = {
       tMs: b.tMs,
-      mainW: sum(b.watts, groups.main),
-      nickiW: sum(b.watts, groups.nicki),
+      mainW: sum(b.watts, groups.main) + shared.mainW,
+      nickiW: sum(b.watts, groups.nicki) + shared.nickiW,
       // Feed is negative when generating. `|| 0` collapses the `-0` that a
       // zero-generation sum would otherwise produce, so bucket equality in tests
       // and downstream comparisons stay predictable.
@@ -210,24 +230,37 @@ export interface HouseholdBill {
 }
 export interface BillResult { mainHouse: HouseholdBill; nicki: HouseholdBill; gaps: number; }
 
-export interface ActualBillSplit { mainHouse: number; nicki: number; mainShare: number; }
+export interface ActualBillSplit {
+  mainHouse: number;
+  nicki: number;
+  /** The supply charge, in the estimate and held as is: no sensor can mis-measure it. */
+  supplyTotal: number;
+  /** How far the sensors' net usage (import cost less solar credit) was scaled up or down. */
+  scale: number;
+}
 
 /**
- * Re-splits a real bill by the ratio of the sensor-based estimate: each
- * household pays its estimated total's share of the actual amount. Null when
- * there is no meaningful ratio (nothing estimated, or a negative total from
- * solar credit outweighing usage).
+ * Re-splits a real bill using the sensors' ratio. The supply charge is a flat
+ * daily rate, so it stays as estimated (shared by `shares`); only each house's
+ * usage cost less its solar credit is scaled, by the one factor that makes the
+ * two houses add up to the typed bill. Null when there is nothing to scale: the
+ * sensors saw no net usage, or the bill is below the supply charge alone.
  */
 export function splitActualBill(estimate: BillResult, actualDollars: number): ActualBillSplit | null {
-  const { total: main } = estimate.mainHouse;
-  const { total: nicki } = estimate.nicki;
-  if (main < 0 || nicki < 0 || main + nicki <= 0) return null;
-  const mainShare = main / (main + nicki);
+  const { mainHouse: main, nicki } = estimate;
+  const mainUsage = main.total - main.supplyChargeShare;
+  const nickiUsage = nicki.total - nicki.supplyChargeShare;
+  const supplyTotal = main.supplyChargeShare + nicki.supplyChargeShare;
+  const estimatedUsage = mainUsage + nickiUsage;
+  const actualUsage = actualDollars - supplyTotal;
+  if (estimatedUsage <= 0 || actualUsage < 0) return null;
+
+  const scale = actualUsage / estimatedUsage;
   // Round the main house, then take Nicki as the remainder so the two cent
   // figures always add back to exactly the typed bill.
-  const mainHouse = Math.round(actualDollars * mainShare * 100) / 100;
-  const nickiDollars = Math.round((actualDollars - mainHouse) * 100) / 100;
-  return { mainHouse, nicki: nickiDollars, mainShare };
+  const mainDollars = Math.round((main.supplyChargeShare + mainUsage * scale) * 100) / 100;
+  const nickiDollars = Math.round((actualDollars - mainDollars) * 100) / 100;
+  return { mainHouse: mainDollars, nicki: nickiDollars, supplyTotal, scale };
 }
 
 export interface AllocateOpts {

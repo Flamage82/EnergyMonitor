@@ -7,7 +7,7 @@ import { applyOctober2026Patch } from "../lib/onceOffOct2026"; // ONCE-OFF(oct-2
 import { dayWindow, monthWindow } from "../lib/time";
 import { usePolledFetch, type AsyncState } from "./usePolledFetch";
 
-const seriesIds = [...config.feeds.main, ...config.feeds.nicki, ...config.feeds.solar];
+const seriesIds = config.allFeedIds;
 // The month query adds the integrator's grid split, for the bill and the daily
 // import/export bars. The day chart plots circuits only, so it skips them.
 const monthIds = [...seriesIds, config.gridFeeds.imports, config.gridFeeds.exports];

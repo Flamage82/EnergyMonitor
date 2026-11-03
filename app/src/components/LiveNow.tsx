@@ -1,6 +1,7 @@
 import { config } from "../config";
 import { useLiveFeeds } from "../hooks/useLiveFeeds";
 import { unmeteredAt } from "../lib/calibration";
+import { apportionShared } from "../lib/energy";
 import { Section } from "./Section";
 
 const sum = (v: Record<number, number>, ids: number[]) => ids.reduce((a, id) => a + (v[id] ?? 0), 0);
@@ -9,8 +10,9 @@ const w = (n: number) => `${Math.round(n).toLocaleString("en-AU")} W`;
 export function LiveNow() {
   const { data, error, lastUpdated } = useLiveFeeds();
   const v = data ?? {};
-  const main = sum(v, config.feeds.main);
-  const nicki = sum(v, config.feeds.nicki);
+  const shared = apportionShared(sum(v, config.feeds.shared.ids), config.feeds.shared.shares);
+  const main = sum(v, config.feeds.main) + shared.mainW;
+  const nicki = sum(v, config.feeds.nicki) + shared.nickiW;
   const solarGen = -sum(v, config.feeds.solar);
   const now = Date.now();
   const net = main + nicki - solarGen + unmeteredAt(config.unmetered, now);

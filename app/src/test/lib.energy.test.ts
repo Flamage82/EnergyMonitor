@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { allocateBill, splitActualBill, buildBuckets, buildFeedBuckets, gridFlowW, inferBucketSeconds, integrateKwh, type MultiFeedSeries, type FeedGroups, type GroupBucket } from "../lib/energy";
+import { allocateBill, apportionShared, splitActualBill, buildBuckets, buildFeedBuckets, gridFlowW, inferBucketSeconds, integrateKwh, type MultiFeedSeries, type FeedGroups, type GroupBucket } from "../lib/energy";
 
 const groups: FeedGroups = { main: [1, 2], nicki: [9], solar: [5] };
 
@@ -407,33 +407,82 @@ describe("allocateBill - supply charge and gaps", () => {
 });
 
 describe("splitActualBill", () => {
-  const house = (total: number) => ({
-    importKwh: 0, importCost: 0, solarCreditShare: 0, supplyChargeShare: 0, total,
+  // `usage` is import cost less solar credit; `supply` is the flat charge share.
+  const house = (usage: number, supply: number) => ({
+    importKwh: 0, importCost: usage, solarCreditShare: 0, supplyChargeShare: supply, total: usage + supply,
   });
-  const estimate = (main: number, nicki: number) => ({
-    mainHouse: house(main), nicki: house(nicki), gaps: 0,
+  const estimate = (main: [number, number], nicki: [number, number]) => ({
+    mainHouse: house(...main), nicki: house(...nicki), gaps: 0,
+  });
+  // Main: $40 usage + $20 supply. Nicki: $10 usage + $4 supply. Estimated total $74.
+  const est = estimate([40, 20], [10, 4]);
+
+  it("reproduces the estimate when the bill matches it", () => {
+    expect(splitActualBill(est, 74)).toMatchObject({ mainHouse: 60, nicki: 14, scale: 1 });
   });
 
-  it("scales the sensor ratio up to the real bill", () => {
-    // 60:20 estimated = 75% / 25% of a real $200 bill
-    expect(splitActualBill(estimate(60, 20), 200)).toEqual({ mainHouse: 150, nicki: 50, mainShare: 0.75 });
+  it("keeps the supply charge fixed and scales only usage to a bigger bill", () => {
+    // $224 = $24 supply + $200 usage, i.e. usage ×4: main 20 + 160, Nicki 4 + 40.
+    expect(splitActualBill(est, 224)).toEqual({ mainHouse: 180, nicki: 44, supplyTotal: 24, scale: 4 });
+  });
+
+  it("keeps the supply charge fixed when scaling usage down", () => {
+    // $34 = $24 supply + $10 usage, i.e. usage ×0.2: main 20 + 8, Nicki 4 + 2.
+    expect(splitActualBill(est, 34)).toMatchObject({ mainHouse: 28, nicki: 6, scale: 0.2 });
+  });
+
+  it("scales a household whose solar credit outweighs its usage", () => {
+    // Nicki nets -$10 (credit > usage). Usage ×2 pushes her to 4 - 20 = -16.
+    const credit = estimate([40, 20], [-10, 4]);
+    expect(splitActualBill(credit, 84)).toMatchObject({ mainHouse: 100, nicki: -16, scale: 2 });
   });
 
   it("rounds to cents and still adds back to the real bill", () => {
-    const split = splitActualBill(estimate(1, 2), 100);
+    const split = splitActualBill(estimate([1, 0], [2, 0]), 100);
     expect(split).toMatchObject({ mainHouse: 33.33, nicki: 66.67 });
     expect(split!.mainHouse + split!.nicki).toBeCloseTo(100, 10);
   });
 
-  it("has no ratio when the estimate sums to zero", () => {
-    expect(splitActualBill(estimate(0, 0), 100)).toBeNull();
+  it("has nothing to scale when the sensors saw no net usage", () => {
+    expect(splitActualBill(estimate([0, 20], [0, 4]), 100)).toBeNull();
   });
 
-  it("has no ratio when a household's estimate is negative", () => {
-    expect(splitActualBill(estimate(-5, 20), 100)).toBeNull();
+  it("has nothing to scale when the bill is below the supply charge alone", () => {
+    expect(splitActualBill(est, 10)).toBeNull();
+  });
+});
+
+describe("apportionShared", () => {
+  it("splits a load by the shares", () => {
+    expect(apportionShared(600, { mainHouse: 5, nicki: 1 })).toEqual({ mainW: 500, nickiW: 100 });
   });
 
-  it("gives a household with a zero estimate nothing", () => {
-    expect(splitActualBill(estimate(40, 0), 80)).toEqual({ mainHouse: 80, nicki: 0, mainShare: 1 });
+  it("keeps the load with the main house when the shares are both zero", () => {
+    expect(apportionShared(600, { mainHouse: 0, nicki: 0 })).toEqual({ mainW: 600, nickiW: 0 });
+  });
+});
+
+describe("buildBuckets shared circuits", () => {
+  const sharedGroups: FeedGroups = {
+    main: [1], nicki: [9], solar: [5], shared: { ids: [7], shares: { mainHouse: 5, nicki: 1 } },
+  };
+  const series: MultiFeedSeries = [
+    { feedid: "1", data: [[1000, 100]] },
+    { feedid: "9", data: [[1000, 30]] },
+    { feedid: "5", data: [[1000, -400]] },
+    { feedid: "7", data: [[1000, 60]] },
+  ];
+
+  it("splits a shared circuit's load between the houses by the shares", () => {
+    // 60 W shared: 50 to main, 10 to Nicki.
+    expect(buildBuckets(series, sharedGroups)[0]).toEqual({
+      tMs: 1000, mainW: 150, nickiW: 40, solarW: 400, partial: false,
+    });
+  });
+
+  it("marks the bucket partial when a shared feed is missing", () => {
+    const [b] = buildBuckets(series.filter((s) => s.feedid !== "7"), sharedGroups);
+    expect(b.partial).toBe(true);
+    expect(b.mainW).toBe(100);
   });
 });

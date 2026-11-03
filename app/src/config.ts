@@ -3,11 +3,16 @@ import type {
 } from "./lib/energy";
 import type { Calibration, UnmeteredStep } from "./lib/calibration";
 
-const feeds: FeedGroups = {
-  main: [384745, 384746, 384747, 384748, 384750, 384751, 384752, 384754],
+// How the supply charge, solar income and shared circuits are divided.
+const shares: Shares = { mainHouse: 5, nicki: 1 };
+
+const feeds = {
+  main: [384745, 384746, 384747, 384748, 384750, 384752, 384754],
   nicki: [545440],
   solar: [384753],
-};
+  // The water treatment plant (HSTP) serves both houses.
+  shared: { ids: [384751], shares },
+} satisfies FeedGroups;
 
 // The IoTaWatt integrator's import/export split of the circuit net, logged
 // from 7 Oct 09:48 (earlier buckets net the circuits). Its formula sums the
@@ -80,7 +85,12 @@ const tariff: Tariff = {
   feedInCentsPerKwh: 5,
 };
 
-const shares: Shares = { mainHouse: 5, nicki: 1 };
+// What AGL actually billed each month, in dollars, keyed "YYYY-MM" (Brisbane
+// calendar month). Pre-fills the bill section's "Actual bill" box for that
+// month. Add a line when a bill arrives.
+const actualBills: Record<string, number> = {
+  "2026-10": 429.00,
+};
 
 interface AppConfig {
   workerBaseUrl: string;
@@ -95,6 +105,7 @@ interface AppConfig {
   allFeedIds: number[];
   tariff: Tariff;
   shares: Shares;
+  actualBills: Record<string, number>;
   solarAllocation: SolarAllocation;
   bucketSeconds: number;
   monthBucketSeconds: number;
@@ -129,9 +140,10 @@ export const config = {
   loadGroups,
   calibration,
   unmetered,
-  allFeedIds: [...feeds.main, ...feeds.nicki, ...feeds.solar],
+  allFeedIds: [...feeds.main, ...feeds.shared.ids, ...feeds.nicki, ...feeds.solar],
   tariff,
   shares,
+  actualBills,
   solarAllocation: "proportional",
   bucketSeconds: 300,
   // Coarser buckets for the whole-month query keep the payload ~1 MB; per spec

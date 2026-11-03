@@ -14,6 +14,11 @@ describe("config", () => {
     expect(config.feeds.solar).toEqual([384753]);
     expect(config.feeds.main).not.toContain(545440);
   });
+  it("shares the water treatment plant between the houses by the standard ratio", () => {
+    expect(config.feeds.shared.ids).toEqual([384751]);
+    expect(config.feeds.shared.shares).toEqual(config.shares);
+    expect(config.feeds.main).not.toContain(384751);
+  });
   it("defines eight by-load series covering every feed exactly once", () => {
     expect(config.loadGroups).toHaveLength(8);
     const covered = config.loadGroups.flatMap((g) => g.ids).sort((a, b) => a - b);
@@ -61,6 +66,9 @@ describe("config", () => {
   it("uses a coarser bucket for the whole-month query", () => {
     expect(config.bucketSeconds).toBe(300);
     expect(config.monthBucketSeconds).toBe(900);
+  });
+  it("records October 2026's actual bill", () => {
+    expect(config.actualBills["2026-10"]).toBe(429);
   });
   it("carries the published tariff", () => {
     expect(config.tariff.importCentsPerKwh).toBe(27.83);

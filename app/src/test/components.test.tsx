@@ -175,8 +175,16 @@ describe("<BillSummary>", () => {
   const mockMonth = (data: GroupBucket[] = buckets) =>
     vi.spyOn(seriesHook, "useMonthData").mockReturnValue(monthState(data));
 
+  // Tests set their own recorded bills rather than depend on the real ones.
+  const cfg = config as { actualBills: Record<string, number> };
+  const realBills = cfg.actualBills;
+  beforeEach(() => {
+    cfg.actualBills = {};
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+    cfg.actualBills = realBills;
   });
 
   it("renders a total for each household", () => {
@@ -283,6 +291,41 @@ describe("<BillSummary>", () => {
     fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
     expect(input.value).toBe("");
     expect(screen.queryByTestId("actual-split")).not.toBeInTheDocument();
+  });
+
+  it("pre-fills the actual bill from the month's recorded value", () => {
+    // 3 Nov: the live month has no record; October (one page back) does.
+    const nov = new Date("2026-11-03T05:00:00Z");
+    cfg.actualBills = { "2026-10": 429 };
+    mockMonth();
+    render(<BillSummary now={nov} />);
+    const input = screen.getByLabelText(/Actual bill/) as HTMLInputElement;
+    expect(input.value).toBe("");
+    expect(screen.queryByTestId("actual-split")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(input.value).toBe("429.00");
+    expect(screen.getByTestId("actual-split")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    expect(input.value).toBe("");
+  });
+
+  it("lets a typed value override the recorded bill, until paging resets it", () => {
+    const nov = new Date("2026-11-03T05:00:00Z");
+    cfg.actualBills = { "2026-10": 429 };
+    mockMonth();
+    render(<BillSummary now={nov} />);
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    const input = screen.getByLabelText(/Actual bill/) as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "" } });
+    expect(input.value).toBe("");
+    expect(screen.queryByTestId("actual-split")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(input.value).toBe("429.00");
   });
 
   it("charges a past month's supply for its full length", () => {
