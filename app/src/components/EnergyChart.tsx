@@ -10,13 +10,15 @@ import { toTodayPoints, toTodayLoadPoints, toMonthDayPoints } from "../lib/chart
 import { dayWindow, monthWindow, dayLabel, monthLabel } from "../lib/time";
 import { Section } from "./Section";
 
-type Range = "today" | "loads" | "month";
+// "house" was stored as "today" until the tab was renamed; an old stored value
+// simply falls through to this default.
+type Range = "house" | "loads" | "month";
 const KEY = "energychart.range";
 const initialRange = (): Range => {
   try {
     const v = localStorage.getItem(KEY);
-    return v === "month" || v === "loads" ? v : "today";
-  } catch { return "today"; }
+    return v === "month" || v === "loads" ? v : "house";
+  } catch { return "house"; }
 };
 
 // Eight-slot categorical palette (defined in App.css) for the by-load lines,
@@ -68,7 +70,7 @@ const hourX = (
 const kwY = <YAxis stroke={axis} domain={[0, "auto"]} tickFormatter={(n) => `${Math.round(n / 100) / 10} kW`} />;
 const wattTooltip = <Tooltip {...tooltipProps} formatter={wattTip} labelFormatter={hourTip} />;
 
-function TodayChart({ buckets }: { buckets: GroupBucket[] }) {
+function HouseChart({ buckets }: { buckets: GroupBucket[] }) {
   return (
     <ComposedChart data={toTodayPoints(buckets)}>
       {hourGrid}{hourX}{kwY}{wattTooltip}
@@ -143,7 +145,7 @@ export function EnergyChart({ now }: { now: Date }) {
 
   const err = isMonth ? month.error : today.error;
   const chart =
-    range === "today" ? <TodayChart buckets={today.data?.buckets ?? []} />
+    range === "house" ? <HouseChart buckets={today.data?.buckets ?? []} />
     : range === "loads" ? <LoadsChart buckets={today.data?.feedBuckets ?? []} />
     : <MonthChart month={month} />;
 
@@ -151,7 +153,7 @@ export function EnergyChart({ now }: { now: Date }) {
     <Section title={`Usage — ${label}`} error={err}>
       <div className="chart-controls">
         <div className="toggle" role="group" aria-label="Chart range">
-          <button aria-pressed={range === "today"} onClick={() => choose("today")}>Today</button>
+          <button aria-pressed={range === "house"} onClick={() => choose("house")}>By house</button>
           <button aria-pressed={range === "loads"} onClick={() => choose("loads")}>By load</button>
           <button aria-pressed={range === "month"} onClick={() => choose("month")}>This month</button>
         </div>

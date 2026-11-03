@@ -101,6 +101,14 @@ describe("<EnergyChart>", () => {
     expect(monthSpy).toHaveBeenCalled();
   });
 
+  it("defaults to the By house tab, including for the old stored 'today' value", () => {
+    mockData();
+    localStorage.setItem("energychart.range", "today");
+    render(<EnergyChart now={now} />);
+    expect(screen.getByRole("button", { name: "By house" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "Today" })).not.toBeInTheDocument();
+  });
+
   it("gives the range toggle an accessible name", () => {
     mockData();
     render(<EnergyChart now={now} />);
@@ -138,7 +146,7 @@ describe("<EnergyChart>", () => {
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
   });
 
-  it("keeps the day offset when toggling between Today and By load", () => {
+  it("keeps the day offset when toggling between By house and By load", () => {
     mockData();
     render(<EnergyChart now={now} />);
     fireEvent.click(screen.getByRole("button", { name: "Previous" }));
