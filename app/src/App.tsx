@@ -3,7 +3,6 @@ import { LiveNow } from "./components/LiveNow";
 import { EnergyChart } from "./components/EnergyChart";
 import { BillSummary } from "./components/BillSummary";
 import { config } from "./config";
-import { useMonthData } from "./hooks/useSeries";
 import "./App.css";
 
 function NotConfigured() {
@@ -34,11 +33,10 @@ export default function App() {
 
 function Dashboard() {
   // `now` is fixed at mount so every panel reads the same "current" instant.
-  // The bill's month poll lives here; the chart owns a second one because it can
-  // page to other months independently (an extra current-month request when
-  // neither has paged away — fine at this app's cadence and traffic).
+  // The chart and the bill each own their month poll because they page
+  // independently (an extra current-month request when neither has paged away —
+  // fine at this app's cadence and traffic).
   const [now] = useState(() => new Date());
-  const month = useMonthData(now);
 
   return (
     <main className="app">
@@ -47,7 +45,7 @@ function Dashboard() {
       </header>
       <LiveNow />
       <EnergyChart now={now} />
-      <BillSummary now={now} month={month} />
+      <BillSummary now={now} />
     </main>
   );
 }

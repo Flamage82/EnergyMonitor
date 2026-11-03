@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { config } from "../config";
-import type { AsyncState } from "../hooks/usePolledFetch";
-import { allocateBill, inferBucketSeconds, type GroupBucket, type HouseholdBill } from "../lib/energy";
-import { effectiveMonthWindow, localDateStartMs, monthLabel } from "../lib/time";
+import { useMonthData } from "../hooks/useSeries";
+import { allocateBill, inferBucketSeconds, type HouseholdBill } from "../lib/energy";
+import { localDateStartMs, monthLabel, monthWindow } from "../lib/time";
 import { Section } from "./Section";
 
 const money = (n: number) => `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
@@ -17,7 +18,9 @@ function excludedDaysNote(dataStartDate: string, timeZone: string): string {
   return `Excludes usage before ${label} (before monitoring was corrected).`;
 }
 
-function Card({ testId, name, bill }: { testId: string; name: string; bill: HouseholdBill }) {
+function Card({ testId, name, bill, totalLabel }: {
+  testId: string; name: string; bill: HouseholdBill; totalLabel: string;
+}) {
   return (
     <div className="bill-card" data-testid={testId}>
       <h3>{name}</h3>
@@ -26,16 +29,20 @@ function Card({ testId, name, bill }: { testId: string; name: string; bill: Hous
         <div><dt>Usage cost</dt><dd>{money(bill.importCost)}</dd></div>
         <div><dt>Solar credit</dt><dd>{money(bill.solarCreditShare)}</dd></div>
         <div><dt>Supply charge</dt><dd>{money(bill.supplyChargeShare)}</dd></div>
-        <div className="total"><dt>Running total</dt><dd>{money(bill.total)}</dd></div>
+        <div className="total"><dt>{totalLabel}</dt><dd>{money(bill.total)}</dd></div>
       </dl>
     </div>
   );
 }
 
-export function BillSummary({ now, month }: { now: Date; month: AsyncState<GroupBucket[]> }) {
-  const { data, error } = month;
+export function BillSummary({ now }: { now: Date }) {
+  // 0 = the current month-to-date; each step back is one whole calendar month.
+  // Not persisted — a reload lands back on the live edge.
+  const [monthOffset, setMonthOffset] = useState(0);
+  const { data, error } = useMonthData(now, monthOffset);
 
-  const { floored, daysElapsed } = effectiveMonthWindow(now, config.timezone, config.dataStartDate);
+  const { monthStart, floored, daysElapsed, isCurrent, atFloor } =
+    monthWindow(now, config.timezone, config.dataStartDate, monthOffset);
 
   const bill = allocateBill(data ?? [], {
     bucketSeconds: inferBucketSeconds(data ?? [], config.monthBucketSeconds),
@@ -45,11 +52,21 @@ export function BillSummary({ now, month }: { now: Date; month: AsyncState<Group
     daysElapsed,
   });
 
+  const label = monthLabel(new Date(monthStart), config.timezone);
+  const totalLabel = isCurrent ? "Running total" : "Total";
+  const step = (delta: -1 | 1) => setMonthOffset((o) => Math.min(0, o + delta));
+
   return (
-    <Section title={`Bill so far — ${monthLabel(now, config.timezone)}`} error={error}>
+    <Section title={isCurrent ? `Bill so far — ${label}` : `Bill — ${label}`} error={error}>
+      <div className="chart-controls bill-controls">
+        <div className="stepper" role="group" aria-label="Bill month">
+          <button aria-label="Previous month" disabled={atFloor} onClick={() => step(-1)}>‹</button>
+          <button aria-label="Next month" disabled={isCurrent} onClick={() => step(1)}>›</button>
+        </div>
+      </div>
       <div className="bill-cards">
-        <Card testId="bill-main" name="Main house" bill={bill.mainHouse} />
-        <Card testId="bill-nicki" name="Nicki" bill={bill.nicki} />
+        <Card testId="bill-main" name="Main house" bill={bill.mainHouse} totalLabel={totalLabel} />
+        <Card testId="bill-nicki" name="Nicki" bill={bill.nicki} totalLabel={totalLabel} />
       </div>
       <p className="note">
         Estimate only — excludes unmonitored loads.

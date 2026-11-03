@@ -197,6 +197,10 @@ body {
   margin-bottom: 0.85rem;
 }
 
+.bill-controls {
+  justify-content: flex-end;
+}
+
 .toggle {
   display: inline-flex;
   border: 1px solid var(--border);

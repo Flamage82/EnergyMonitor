@@ -9,6 +9,7 @@ import App from "../App";
 import { LiveNow } from "../components/LiveNow";
 import { EnergyChart } from "../components/EnergyChart";
 import { BillSummary } from "../components/BillSummary";
+import { config } from "../config";
 
 const monthState = (data: GroupBucket[]): AsyncState<GroupBucket[]> => ({
   data, error: null, loading: false, lastUpdated: 1,
@@ -138,45 +139,80 @@ describe("<EnergyChart>", () => {
 });
 
 describe("<BillSummary>", () => {
-  // `now` and the month data are both props now — App owns the single
-  // useMonthData mount — so no fake clock or hook spy is needed.
+  // `now` is 15 Oct; the configured data floor is 7 Oct 10:00, so September is
+  // before monitoring and October is the earliest month worth paging to.
   const now = new Date("2026-10-15T05:00:00Z");
   const buckets: GroupBucket[] = [
     { tMs: Date.parse("2026-10-08T14:00:00Z"), mainW: 1000, nickiW: 500, solarW: 200, partial: false },
   ];
+  const mockMonth = (data: GroupBucket[] = buckets) =>
+    vi.spyOn(seriesHook, "useMonthData").mockReturnValue(monthState(data));
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it("renders a total for each household", () => {
-    render(<BillSummary now={now} month={monthState(buckets)} />);
+    mockMonth();
+    render(<BillSummary now={now} />);
     expect(screen.getByTestId("bill-main")).toHaveTextContent("$");
     expect(screen.getByTestId("bill-nicki")).toHaveTextContent("$");
     expect(screen.getByText(/estimate/i)).toBeInTheDocument();
   });
 
   it("notes the excluded pre-monitoring days when the data floor is in effect", () => {
-    render(<BillSummary now={now} month={monthState(buckets)} />);
+    mockMonth();
+    render(<BillSummary now={now} />);
     expect(
       screen.getByText(/Excludes usage before 7 Oct, 10:00\s?am \(before monitoring was corrected\)\./),
     ).toBeInTheDocument();
   });
 
   it("reports data gaps from partial buckets", () => {
-    render(
-      <BillSummary
-        now={now}
-        month={monthState([{ ...buckets[0], partial: true }])}
-      />,
-    );
+    mockMonth([{ ...buckets[0], partial: true }]);
+    render(<BillSummary now={now} />);
     expect(screen.getByText(/1 data gap\./)).toBeInTheDocument();
   });
 
-  it("does not mount its own month poll (App owns it)", () => {
-    const monthSpy = vi.spyOn(seriesHook, "useMonthData");
-    render(<BillSummary now={now} month={monthState(buckets)} />);
-    expect(monthSpy).not.toHaveBeenCalled();
+  it("starts at the live month with step-forward disabled", () => {
+    const monthSpy = mockMonth();
+    render(<BillSummary now={now} />);
+    expect(screen.getByRole("heading", { name: /Bill/ })).toHaveTextContent("Bill so far — October 2026");
+    expect(screen.getByRole("button", { name: "Next month" })).toBeDisabled();
+    expect(monthSpy).toHaveBeenLastCalledWith(now, 0);
+  });
+
+  it("pages back a whole month, then stops at the data-start floor", () => {
+    // 3 Nov: October is complete and holds the floor, so there is nothing earlier.
+    const nov = new Date("2026-11-03T05:00:00Z");
+    const monthSpy = mockMonth();
+    render(<BillSummary now={nov} />);
+    expect(screen.getByRole("button", { name: "Previous month" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(monthSpy).toHaveBeenLastCalledWith(nov, -1);
+    expect(screen.getByRole("heading", { name: /Bill/ })).toHaveTextContent("Bill — October 2026");
+    expect(screen.getByTestId("bill-main")).toHaveTextContent("Total");
+    expect(screen.getByTestId("bill-main")).not.toHaveTextContent("Running total");
+    expect(screen.getByRole("button", { name: "Previous month" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next month" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    expect(screen.getByRole("heading", { name: /Bill/ })).toHaveTextContent("Bill so far — November 2026");
+  });
+
+  it("charges a past month's supply for its full length", () => {
+    // Full November (30 days) at the configured supply rate, no usage data.
+    const dec = new Date("2026-12-03T05:00:00Z");
+    mockMonth([]);
+    render(<BillSummary now={dec} />);
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    const supplyDollars = (config.tariff.supplyChargeCentsPerDay * 30) / 100;
+    const total = screen.getByTestId("bill-main").textContent ?? "";
+    const nicki = screen.getByTestId("bill-nicki").textContent ?? "";
+    const share = (n: number) => (supplyDollars * n) / (config.shares.mainHouse + config.shares.nicki);
+    expect(total).toContain(`$${share(config.shares.mainHouse).toFixed(2)}`);
+    expect(nicki).toContain(`$${share(config.shares.nicki).toFixed(2)}`);
   });
 });
 

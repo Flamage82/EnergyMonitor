@@ -49,16 +49,13 @@ Items deferred from the final whole-branch review of `feat/energy-dashboard`
 - `now` is fixed at page load (`App.tsx` `useState(() => new Date())`). A tab left
   open across midnight / the month rollover won't advance the "today" / "this
   month" window until reload. Acceptable for the audience; revisit if it bites.
-- **Bill month navigation.** The chart can page day/month
-  (`feat/chart-day-navigation`); the bill still only shows the current
-  month-to-date. Deferred until there's a completed prior month of data (Oct
-  2026) to build and test historical proration against — `daysElapsed`, the
-  "Bill so far" title and the pre-monitoring-days note all need past-month
-  variants.
-- The chart and the bill now each mount their own `useMonthData`; at the live
-  edge (neither paged away) that's two identical current-month requests every
-  `billRecomputeMs`. Fine at this app's cadence/traffic; the shared single poll
-  in `App.tsx` was dropped because the two panels page independently.
+- The chart and the bill each mount their own `useMonthData` (the bill pages
+  months independently via its ‹ › stepper); at the live edge (neither paged
+  away) that's two identical current-month requests every `billRecomputeMs`.
+  Fine at this app's cadence/traffic.
+- Bill month navigation shipped (3 Nov 2026). Past months use the full-month
+  `daysElapsed` from `monthWindow`; October is the earliest month (data floor).
+  Worth eyeballing October's total against the AGL bill once it arrives.
 - **Monitor under-reads vs. the retailer's meter — see
   [`metering-accuracy.md`](metering-accuracy.md).** *19 Oct 2026: the
   bucketing loss is fixed (the bill uses the IoTaWatt integrator feeds) and
