@@ -94,7 +94,7 @@ reaches the browser.
 ### Config knobs (`app/src/config.ts`)
 
 - `tariff` — `importCentsPerKwh`, `supplyChargeCentsPerDay`, `feedInCentsPerKwh`.
-- `shares` — household split for shared costs (currently `{ mainHouse: 4, nicki: 1 }`, a 4:1 split).
+- `shares` — household split for shared costs (currently `{ mainHouse: 5, nicki: 1 }`, a 5:1 split, applied to every month).
 - `solarAllocation` — `"proportional"` (default) or `"mainHouseFirst"`.
 - `bucketSeconds` — chart aggregation bucket size (currently 300).
 - `livePollMs`, `billRecomputeMs`, `todayRefreshMs` — poll / refresh intervals.

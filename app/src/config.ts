@@ -80,7 +80,7 @@ const tariff: Tariff = {
   feedInCentsPerKwh: 5,
 };
 
-const shares: Shares = { mainHouse: 4, nicki: 1 };
+const shares: Shares = { mainHouse: 5, nicki: 1 };
 
 interface AppConfig {
   workerBaseUrl: string;
